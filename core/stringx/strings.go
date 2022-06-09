@@ -3,7 +3,7 @@ package stringx
 import (
 	"errors"
 
-	"github.com/tal-tech/go-zero/core/lang"
+	"github.com/zeromicro/go-zero/core/lang"
 )
 
 var (
@@ -38,6 +38,24 @@ func Filter(s string, filter func(r rune) bool) string {
 	}
 
 	return string(chars[:n])
+}
+
+// FirstN returns first n runes from s.
+func FirstN(s string, n int, ellipsis ...string) string {
+	var i int
+
+	for j := range s {
+		if i == n {
+			ret := s[:j]
+			for _, each := range ellipsis {
+				ret += each
+			}
+			return ret
+		}
+		i++
+	}
+
+	return s
 }
 
 // HasEmpty checks if there are empty strings in args.
@@ -85,7 +103,8 @@ func Reverse(s string) string {
 	return string(runes)
 }
 
-// Substr returns runes between start and stop [start, stop) regardless of the chars are ascii or utf8.
+// Substr returns runes between start and stop [start, stop)
+// regardless of the chars are ascii or utf8.
 func Substr(str string, start, stop int) (string, error) {
 	rs := []rune(str)
 	length := len(rs)

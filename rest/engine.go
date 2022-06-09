@@ -1,19 +1,21 @@
 package rest
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/justinas/alice"
-	"github.com/tal-tech/go-zero/core/codec"
-	"github.com/tal-tech/go-zero/core/load"
-	"github.com/tal-tech/go-zero/core/stat"
-	"github.com/tal-tech/go-zero/rest/handler"
-	"github.com/tal-tech/go-zero/rest/httpx"
-	"github.com/tal-tech/go-zero/rest/internal"
-	"github.com/tal-tech/go-zero/rest/router"
+	"github.com/zeromicro/go-zero/core/codec"
+	"github.com/zeromicro/go-zero/core/load"
+	"github.com/zeromicro/go-zero/core/stat"
+	"github.com/zeromicro/go-zero/rest/handler"
+	"github.com/zeromicro/go-zero/rest/httpx"
+	"github.com/zeromicro/go-zero/rest/internal"
+	"github.com/zeromicro/go-zero/rest/internal/response"
 )
 
 // use 1000m to represent 100%
@@ -30,73 +32,50 @@ type engine struct {
 	middlewares          []Middleware
 	shedder              load.Shedder
 	priorityShedder      load.Shedder
+	tlsConfig            *tls.Config
 }
 
 func newEngine(c RestConf) *engine {
-	srv := &engine{
+	svr := &engine{
 		conf: c,
 	}
 	if c.CpuThreshold > 0 {
-		srv.shedder = load.NewAdaptiveShedder(load.WithCpuThreshold(c.CpuThreshold))
-		srv.priorityShedder = load.NewAdaptiveShedder(load.WithCpuThreshold(
+		svr.shedder = load.NewAdaptiveShedder(load.WithCpuThreshold(c.CpuThreshold))
+		svr.priorityShedder = load.NewAdaptiveShedder(load.WithCpuThreshold(
 			(c.CpuThreshold + topCpuUsage) >> 1))
 	}
 
-	return srv
+	return svr
 }
 
-func (s *engine) AddRoutes(r featuredRoutes) {
-	s.routes = append(s.routes, r)
+func (ng *engine) addRoutes(r featuredRoutes) {
+	ng.routes = append(ng.routes, r)
 }
 
-func (s *engine) SetUnauthorizedCallback(callback handler.UnauthorizedCallback) {
-	s.unauthorizedCallback = callback
-}
-
-func (s *engine) SetUnsignedCallback(callback handler.UnsignedCallback) {
-	s.unsignedCallback = callback
-}
-
-func (s *engine) Start() error {
-	return s.StartWithRouter(router.NewRouter())
-}
-
-func (s *engine) StartWithRouter(router httpx.Router) error {
-	if err := s.bindRoutes(router); err != nil {
-		return err
-	}
-
-	if len(s.conf.CertFile) == 0 && len(s.conf.KeyFile) == 0 {
-		return internal.StartHttp(s.conf.Host, s.conf.Port, router)
-	}
-
-	return internal.StartHttps(s.conf.Host, s.conf.Port, s.conf.CertFile, s.conf.KeyFile, router)
-}
-
-func (s *engine) appendAuthHandler(fr featuredRoutes, chain alice.Chain,
+func (ng *engine) appendAuthHandler(fr featuredRoutes, chain alice.Chain,
 	verifier func(alice.Chain) alice.Chain) alice.Chain {
 	if fr.jwt.enabled {
 		if len(fr.jwt.prevSecret) == 0 {
 			chain = chain.Append(handler.Authorize(fr.jwt.secret,
-				handler.WithUnauthorizedCallback(s.unauthorizedCallback)))
+				handler.WithUnauthorizedCallback(ng.unauthorizedCallback)))
 		} else {
 			chain = chain.Append(handler.Authorize(fr.jwt.secret,
 				handler.WithPrevSecret(fr.jwt.prevSecret),
-				handler.WithUnauthorizedCallback(s.unauthorizedCallback)))
+				handler.WithUnauthorizedCallback(ng.unauthorizedCallback)))
 		}
 	}
 
 	return verifier(chain)
 }
 
-func (s *engine) bindFeaturedRoutes(router httpx.Router, fr featuredRoutes, metrics *stat.Metrics) error {
-	verifier, err := s.signatureVerifier(fr.signature)
+func (ng *engine) bindFeaturedRoutes(router httpx.Router, fr featuredRoutes, metrics *stat.Metrics) error {
+	verifier, err := ng.signatureVerifier(fr.signature)
 	if err != nil {
 		return err
 	}
 
 	for _, route := range fr.routes {
-		if err := s.bindRoute(fr, router, metrics, route, verifier); err != nil {
+		if err := ng.bindRoute(fr, router, metrics, route, verifier); err != nil {
 			return err
 		}
 	}
@@ -104,24 +83,24 @@ func (s *engine) bindFeaturedRoutes(router httpx.Router, fr featuredRoutes, metr
 	return nil
 }
 
-func (s *engine) bindRoute(fr featuredRoutes, router httpx.Router, metrics *stat.Metrics,
+func (ng *engine) bindRoute(fr featuredRoutes, router httpx.Router, metrics *stat.Metrics,
 	route Route, verifier func(chain alice.Chain) alice.Chain) error {
 	chain := alice.New(
-		handler.TracingHandler,
-		s.getLogHandler(),
+		handler.TracingHandler(ng.conf.Name, route.Path),
+		ng.getLogHandler(),
 		handler.PrometheusHandler(route.Path),
-		handler.MaxConns(s.conf.MaxConns),
+		handler.MaxConns(ng.conf.MaxConns),
 		handler.BreakerHandler(route.Method, route.Path, metrics),
-		handler.SheddingHandler(s.getShedder(fr.priority), metrics),
-		handler.TimeoutHandler(time.Duration(s.conf.Timeout)*time.Millisecond),
+		handler.SheddingHandler(ng.getShedder(fr.priority), metrics),
+		handler.TimeoutHandler(ng.checkedTimeout(fr.timeout)),
 		handler.RecoverHandler,
 		handler.MetricHandler(metrics),
-		handler.MaxBytesHandler(s.conf.MaxBytes),
+		handler.MaxBytesHandler(ng.checkedMaxBytes(fr.maxBytes)),
 		handler.GunzipHandler,
 	)
-	chain = s.appendAuthHandler(fr, chain, verifier)
+	chain = ng.appendAuthHandler(fr, chain, verifier)
 
-	for _, middleware := range s.middlewares {
+	for _, middleware := range ng.middlewares {
 		chain = chain.Append(convertMiddleware(middleware))
 	}
 	handle := chain.ThenFunc(route.Handler)
@@ -129,11 +108,11 @@ func (s *engine) bindRoute(fr featuredRoutes, router httpx.Router, metrics *stat
 	return router.Handle(route.Method, route.Path, handle)
 }
 
-func (s *engine) bindRoutes(router httpx.Router) error {
-	metrics := s.createMetrics()
+func (ng *engine) bindRoutes(router httpx.Router) error {
+	metrics := ng.createMetrics()
 
-	for _, fr := range s.routes {
-		if err := s.bindFeaturedRoutes(router, fr, metrics); err != nil {
+	for _, fr := range ng.routes {
+		if err := ng.bindFeaturedRoutes(router, fr, metrics); err != nil {
 			return err
 		}
 	}
@@ -141,35 +120,101 @@ func (s *engine) bindRoutes(router httpx.Router) error {
 	return nil
 }
 
-func (s *engine) createMetrics() *stat.Metrics {
+func (ng *engine) checkedMaxBytes(bytes int64) int64 {
+	if bytes > 0 {
+		return bytes
+	}
+
+	return ng.conf.MaxBytes
+}
+
+func (ng *engine) checkedTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 {
+		return timeout
+	}
+
+	return time.Duration(ng.conf.Timeout) * time.Millisecond
+}
+
+func (ng *engine) createMetrics() *stat.Metrics {
 	var metrics *stat.Metrics
 
-	if len(s.conf.Name) > 0 {
-		metrics = stat.NewMetrics(s.conf.Name)
+	if len(ng.conf.Name) > 0 {
+		metrics = stat.NewMetrics(ng.conf.Name)
 	} else {
-		metrics = stat.NewMetrics(fmt.Sprintf("%s:%d", s.conf.Host, s.conf.Port))
+		metrics = stat.NewMetrics(fmt.Sprintf("%s:%d", ng.conf.Host, ng.conf.Port))
 	}
 
 	return metrics
 }
 
-func (s *engine) getLogHandler() func(http.Handler) http.Handler {
-	if s.conf.Verbose {
+func (ng *engine) getLogHandler() func(http.Handler) http.Handler {
+	if ng.conf.Verbose {
 		return handler.DetailedLogHandler
 	}
 
 	return handler.LogHandler
 }
 
-func (s *engine) getShedder(priority bool) load.Shedder {
-	if priority && s.priorityShedder != nil {
-		return s.priorityShedder
+func (ng *engine) getShedder(priority bool) load.Shedder {
+	if priority && ng.priorityShedder != nil {
+		return ng.priorityShedder
 	}
 
-	return s.shedder
+	return ng.shedder
 }
 
-func (s *engine) signatureVerifier(signature signatureSetting) (func(chain alice.Chain) alice.Chain, error) {
+// notFoundHandler returns a middleware that handles 404 not found requests.
+func (ng *engine) notFoundHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chain := alice.New(
+			handler.TracingHandler(ng.conf.Name, ""),
+			ng.getLogHandler(),
+		)
+
+		var h http.Handler
+		if next != nil {
+			h = chain.Then(next)
+		} else {
+			h = chain.Then(http.NotFoundHandler())
+		}
+
+		cw := response.NewHeaderOnceResponseWriter(w)
+		h.ServeHTTP(cw, r)
+		cw.WriteHeader(http.StatusNotFound)
+	})
+}
+
+func (ng *engine) print() {
+	var routes []string
+
+	for _, fr := range ng.routes {
+		for _, route := range fr.routes {
+			routes = append(routes, fmt.Sprintf("%s %s", route.Method, route.Path))
+		}
+	}
+
+	sort.Strings(routes)
+
+	fmt.Println("Routes:")
+	for _, route := range routes {
+		fmt.Printf("  %s\n", route)
+	}
+}
+
+func (ng *engine) setTlsConfig(cfg *tls.Config) {
+	ng.tlsConfig = cfg
+}
+
+func (ng *engine) setUnauthorizedCallback(callback handler.UnauthorizedCallback) {
+	ng.unauthorizedCallback = callback
+}
+
+func (ng *engine) setUnsignedCallback(callback handler.UnsignedCallback) {
+	ng.unsignedCallback = callback
+}
+
+func (ng *engine) signatureVerifier(signature signatureSetting) (func(chain alice.Chain) alice.Chain, error) {
 	if !signature.enabled {
 		return func(chain alice.Chain) alice.Chain {
 			return chain
@@ -199,9 +244,9 @@ func (s *engine) signatureVerifier(signature signatureSetting) (func(chain alice
 	}
 
 	return func(chain alice.Chain) alice.Chain {
-		if s.unsignedCallback != nil {
+		if ng.unsignedCallback != nil {
 			return chain.Append(handler.ContentSecurityHandler(
-				decrypters, signature.Expiry, signature.Strict, s.unsignedCallback))
+				decrypters, signature.Expiry, signature.Strict, ng.unsignedCallback))
 		}
 
 		return chain.Append(handler.ContentSecurityHandler(
@@ -209,8 +254,41 @@ func (s *engine) signatureVerifier(signature signatureSetting) (func(chain alice
 	}, nil
 }
 
-func (s *engine) use(middleware Middleware) {
-	s.middlewares = append(s.middlewares, middleware)
+func (ng *engine) start(router httpx.Router) error {
+	if err := ng.bindRoutes(router); err != nil {
+		return err
+	}
+
+	if len(ng.conf.CertFile) == 0 && len(ng.conf.KeyFile) == 0 {
+		return internal.StartHttp(ng.conf.Host, ng.conf.Port, router, ng.withTimeout())
+	}
+
+	return internal.StartHttps(ng.conf.Host, ng.conf.Port, ng.conf.CertFile,
+		ng.conf.KeyFile, router, func(svr *http.Server) {
+			if ng.tlsConfig != nil {
+				svr.TLSConfig = ng.tlsConfig
+			}
+		}, ng.withTimeout())
+}
+
+func (ng *engine) use(middleware Middleware) {
+	ng.middlewares = append(ng.middlewares, middleware)
+}
+
+func (ng *engine) withTimeout() internal.StartOption {
+	return func(svr *http.Server) {
+		timeout := ng.conf.Timeout
+		if timeout > 0 {
+			// factor 0.8, to avoid clients send longer content-length than the actual content,
+			// without this timeout setting, the server will time out and respond 503 Service Unavailable,
+			// which triggers the circuit breaker.
+			svr.ReadTimeout = 4 * time.Duration(timeout) * time.Millisecond / 5
+			// factor 0.9, to avoid clients not reading the response
+			// without this timeout setting, the server will time out and respond 503 Service Unavailable,
+			// which triggers the circuit breaker.
+			svr.WriteTimeout = 9 * time.Duration(timeout) * time.Millisecond / 10
+		}
+	}
 }
 
 func convertMiddleware(ware Middleware) func(http.Handler) http.Handler {

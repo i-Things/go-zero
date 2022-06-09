@@ -3,69 +3,11 @@ package logx
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
 
-	"github.com/tal-tech/go-zero/core/timex"
-	"github.com/tal-tech/go-zero/core/trace/tracespec"
+	"github.com/zeromicro/go-zero/core/timex"
+	"go.opentelemetry.io/otel/trace"
 )
-
-type traceLogger struct {
-	logEntry
-	Trace string `json:"trace,omitempty"`
-	Span  string `json:"span,omitempty"`
-	ctx   context.Context
-}
-
-func (l *traceLogger) Error(v ...interface{}) {
-	if shouldLog(ErrorLevel) {
-		l.write(errorLog, levelError, formatWithCaller(fmt.Sprint(v...), durationCallerDepth))
-	}
-}
-
-func (l *traceLogger) Errorf(format string, v ...interface{}) {
-	if shouldLog(ErrorLevel) {
-		l.write(errorLog, levelError, formatWithCaller(fmt.Sprintf(format, v...), durationCallerDepth))
-	}
-}
-
-func (l *traceLogger) Info(v ...interface{}) {
-	if shouldLog(InfoLevel) {
-		l.write(infoLog, levelInfo, fmt.Sprint(v...))
-	}
-}
-
-func (l *traceLogger) Infof(format string, v ...interface{}) {
-	if shouldLog(InfoLevel) {
-		l.write(infoLog, levelInfo, fmt.Sprintf(format, v...))
-	}
-}
-
-func (l *traceLogger) Slow(v ...interface{}) {
-	if shouldLog(ErrorLevel) {
-		l.write(slowLog, levelSlow, fmt.Sprint(v...))
-	}
-}
-
-func (l *traceLogger) Slowf(format string, v ...interface{}) {
-	if shouldLog(ErrorLevel) {
-		l.write(slowLog, levelSlow, fmt.Sprintf(format, v...))
-	}
-}
-
-func (l *traceLogger) WithDuration(duration time.Duration) Logger {
-	l.Duration = timex.ReprOfDuration(duration)
-	return l
-}
-
-func (l *traceLogger) write(writer io.Writer, level, content string) {
-	l.Timestamp = getTimestamp()
-	l.Level = level
-	l.Content = content
-	l.Trace = traceIdFromContext(l.ctx)
-	l.Span = spanIdFromContext(l.ctx)
-	outputJson(writer, l)
-}
 
 // WithContext sets ctx to log, for keeping tracing information.
 func WithContext(ctx context.Context) Logger {
@@ -74,20 +16,121 @@ func WithContext(ctx context.Context) Logger {
 	}
 }
 
-func spanIdFromContext(ctx context.Context) string {
-	t, ok := ctx.Value(tracespec.TracingKey).(tracespec.Trace)
-	if !ok {
-		return ""
+type traceLogger struct {
+	logEntry
+	ctx context.Context
+}
+
+func (l *traceLogger) Error(v ...interface{}) {
+	l.err(fmt.Sprint(v...))
+}
+
+func (l *traceLogger) Errorf(format string, v ...interface{}) {
+	l.err(fmt.Sprintf(format, v...))
+}
+
+func (l *traceLogger) Errorv(v interface{}) {
+	l.err(fmt.Sprint(v))
+}
+
+func (l *traceLogger) Errorw(msg string, fields ...LogField) {
+	l.err(msg, fields...)
+}
+
+func (l *traceLogger) Info(v ...interface{}) {
+	l.info(fmt.Sprint(v...))
+}
+
+func (l *traceLogger) Infof(format string, v ...interface{}) {
+	l.info(fmt.Sprintf(format, v...))
+}
+
+func (l *traceLogger) Infov(v interface{}) {
+	l.info(v)
+}
+
+func (l *traceLogger) Infow(msg string, fields ...LogField) {
+	l.info(msg, fields...)
+}
+
+func (l *traceLogger) Slow(v ...interface{}) {
+	l.slow(fmt.Sprint(v...))
+}
+
+func (l *traceLogger) Slowf(format string, v ...interface{}) {
+	l.slow(fmt.Sprintf(format, v...))
+}
+
+func (l *traceLogger) Slowv(v interface{}) {
+	l.slow(v)
+}
+
+func (l *traceLogger) Sloww(msg string, fields ...LogField) {
+	l.slow(msg, fields...)
+}
+
+func (l *traceLogger) WithContext(ctx context.Context) Logger {
+	if ctx == nil {
+		return l
 	}
 
-	return t.SpanId()
+	l.ctx = ctx
+	return l
+}
+
+func (l *traceLogger) WithDuration(duration time.Duration) Logger {
+	l.Duration = timex.ReprOfDuration(duration)
+	return l
+}
+
+func (l *traceLogger) buildFields(fields ...LogField) []LogField {
+	if len(l.Duration) > 0 {
+		fields = append(fields, Field(durationKey, l.Duration))
+	}
+	traceID := traceIdFromContext(l.ctx)
+	if len(traceID) > 0 {
+		fields = append(fields, Field(traceKey, traceID))
+	}
+	spanID := spanIdFromContext(l.ctx)
+	if len(spanID) > 0 {
+		fields = append(fields, Field(spanKey, spanID))
+	}
+
+	return fields
+}
+
+func (l *traceLogger) err(v interface{}, fields ...LogField) {
+	if shallLog(ErrorLevel) {
+		getWriter().Error(v, l.buildFields(fields...)...)
+	}
+}
+
+func (l *traceLogger) info(v interface{}, fields ...LogField) {
+	if shallLog(InfoLevel) {
+		getWriter().Info(v, l.buildFields(fields...)...)
+	}
+}
+
+func (l *traceLogger) slow(v interface{}, fields ...LogField) {
+	if shallLog(ErrorLevel) {
+		getWriter().Slow(v, l.buildFields(fields...)...)
+	}
+}
+
+func spanIdFromContext(ctx context.Context) string {
+	spanCtx := trace.SpanContextFromContext(ctx)
+	if spanCtx.HasSpanID() {
+		return spanCtx.SpanID().String()
+	}
+
+	return ""
 }
 
 func traceIdFromContext(ctx context.Context) string {
-	t, ok := ctx.Value(tracespec.TracingKey).(tracespec.Trace)
-	if !ok {
-		return ""
+	spanCtx := trace.SpanContextFromContext(ctx)
+	if spanCtx.HasTraceID() {
+		return spanCtx.TraceID().String()
 	}
 
-	return t.TraceId()
+	return ""
 }

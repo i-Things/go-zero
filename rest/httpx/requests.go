@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tal-tech/go-zero/core/mapping"
-	"github.com/tal-tech/go-zero/rest/internal/context"
+	"github.com/zeromicro/go-zero/core/mapping"
+	"github.com/zeromicro/go-zero/rest/internal/encoding"
+	"github.com/zeromicro/go-zero/rest/internal/header"
+	"github.com/zeromicro/go-zero/rest/pathvar"
 )
 
 const (
 	formKey           = "form"
 	pathKey           = "path"
-	headerKey         = "header"
-	emptyJson         = "{}"
 	maxMemory         = 32 << 20 // 32MB
 	maxBodyLen        = 8 << 20  // 8MB
 	separator         = ";"
@@ -21,9 +21,8 @@ const (
 )
 
 var (
-	formUnmarshaler   = mapping.NewUnmarshaler(formKey, mapping.WithStringValues())
-	pathUnmarshaler   = mapping.NewUnmarshaler(pathKey, mapping.WithStringValues())
-	headerUnmarshaler = mapping.NewUnmarshaler(headerKey, mapping.WithStringValues())
+	formUnmarshaler = mapping.NewUnmarshaler(formKey, mapping.WithStringValues())
+	pathUnmarshaler = mapping.NewUnmarshaler(pathKey, mapping.WithStringValues())
 )
 
 // Parse parses the request.
@@ -45,17 +44,7 @@ func Parse(r *http.Request, v interface{}) error {
 
 // ParseHeaders parses the headers request.
 func ParseHeaders(r *http.Request, v interface{}) error {
-	m := map[string]interface{}{}
-	for k, v := range r.Header {
-		k = strings.ToLower(k)
-		if len(v) == 1 {
-			m[k] = v[0]
-		} else {
-			m[k] = v
-		}
-	}
-
-	return headerUnmarshaler.Unmarshal(m, v)
+	return encoding.ParseHeaders(r.Header, v)
 }
 
 // ParseForm parses the form request.
@@ -105,20 +94,18 @@ func ParseHeader(headerValue string) map[string]string {
 
 // ParseJsonBody parses the post request which contains json in body.
 func ParseJsonBody(r *http.Request, v interface{}) error {
-	var reader io.Reader
 	if withJsonBody(r) {
-		reader = io.LimitReader(r.Body, maxBodyLen)
-	} else {
-		reader = strings.NewReader(emptyJson)
+		reader := io.LimitReader(r.Body, maxBodyLen)
+		return mapping.UnmarshalJsonReader(reader, v)
 	}
 
-	return mapping.UnmarshalJsonReader(reader, v)
+	return mapping.UnmarshalJsonMap(nil, v)
 }
 
 // ParsePath parses the symbols reside in url path.
 // Like http://localhost/bag/:name
 func ParsePath(r *http.Request, v interface{}) error {
-	vars := context.Vars(r)
+	vars := pathvar.Vars(r)
 	m := make(map[string]interface{}, len(vars))
 	for k, v := range vars {
 		m[k] = v
@@ -128,5 +115,5 @@ func ParsePath(r *http.Request, v interface{}) error {
 }
 
 func withJsonBody(r *http.Request) bool {
-	return r.ContentLength > 0 && strings.Contains(r.Header.Get(ContentType), ApplicationJson)
+	return r.ContentLength > 0 && strings.Contains(r.Header.Get(header.ContentType), header.ApplicationJson)
 }

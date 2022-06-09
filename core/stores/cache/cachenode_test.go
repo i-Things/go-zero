@@ -11,12 +11,12 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/tal-tech/go-zero/core/logx"
-	"github.com/tal-tech/go-zero/core/mathx"
-	"github.com/tal-tech/go-zero/core/stat"
-	"github.com/tal-tech/go-zero/core/stores/redis"
-	"github.com/tal-tech/go-zero/core/stores/redis/redistest"
-	"github.com/tal-tech/go-zero/core/syncx"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/mathx"
+	"github.com/zeromicro/go-zero/core/stat"
+	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/core/stores/redis/redistest"
+	"github.com/zeromicro/go-zero/core/syncx"
 )
 
 var errTestNotFound = errors.New("not found")
@@ -29,6 +29,7 @@ func init() {
 func TestCacheNode_DelCache(t *testing.T) {
 	store, clean, err := redistest.CreateRedis()
 	assert.Nil(t, err)
+	store.Type = redis.ClusterType
 	defer clean()
 
 	cn := cacheNode{
@@ -49,13 +50,30 @@ func TestCacheNode_DelCache(t *testing.T) {
 	assert.Nil(t, cn.Del("first", "second"))
 }
 
+func TestCacheNode_DelCacheWithErrors(t *testing.T) {
+	store, clean, err := redistest.CreateRedis()
+	assert.Nil(t, err)
+	defer clean()
+	store.Type = redis.ClusterType
+
+	cn := cacheNode{
+		rds:            store,
+		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
+		lock:           new(sync.Mutex),
+		unstableExpiry: mathx.NewUnstable(expiryDeviation),
+		stat:           NewStat("any"),
+		errNotFound:    errTestNotFound,
+	}
+	assert.Nil(t, cn.Del("third", "fourth"))
+}
+
 func TestCacheNode_InvalidCache(t *testing.T) {
 	s, err := miniredis.Run()
 	assert.Nil(t, err)
 	defer s.Close()
 
 	cn := cacheNode{
-		rds:            redis.NewRedis(s.Addr(), redis.NodeType),
+		rds:            redis.New(s.Addr()),
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
@@ -70,7 +88,7 @@ func TestCacheNode_InvalidCache(t *testing.T) {
 	assert.Equal(t, miniredis.ErrKeyNotFound, err)
 }
 
-func TestCacheNode_Take(t *testing.T) {
+func TestCacheNode_SetWithExpire(t *testing.T) {
 	store, clean, err := redistest.CreateRedis()
 	assert.Nil(t, err)
 	defer clean()
@@ -78,12 +96,22 @@ func TestCacheNode_Take(t *testing.T) {
 	cn := cacheNode{
 		rds:            store,
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		barrier:        syncx.NewSharedCalls(),
+		barrier:        syncx.NewSingleFlight(),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           NewStat("any"),
-		errNotFound:    errTestNotFound,
+		errNotFound:    errors.New("any"),
 	}
+	assert.NotNil(t, cn.SetWithExpire("key", make(chan int), time.Second))
+}
+
+func TestCacheNode_Take(t *testing.T) {
+	store, clean, err := redistest.CreateRedis()
+	assert.Nil(t, err)
+	defer clean()
+
+	cn := NewNode(store, syncx.NewSingleFlight(), NewStat("any"), errTestNotFound,
+		WithExpiry(time.Second), WithNotFoundExpiry(time.Second))
 	var str string
 	err = cn.Take(&str, "any", func(v interface{}) error {
 		*v.(*string) = "value"
@@ -105,7 +133,7 @@ func TestCacheNode_TakeNotFound(t *testing.T) {
 	cn := cacheNode{
 		rds:            store,
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		barrier:        syncx.NewSharedCalls(),
+		barrier:        syncx.NewSingleFlight(),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           NewStat("any"),
@@ -144,7 +172,7 @@ func TestCacheNode_TakeWithExpire(t *testing.T) {
 	cn := cacheNode{
 		rds:            store,
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		barrier:        syncx.NewSharedCalls(),
+		barrier:        syncx.NewSingleFlight(),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           NewStat("any"),
@@ -171,7 +199,7 @@ func TestCacheNode_String(t *testing.T) {
 	cn := cacheNode{
 		rds:            store,
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		barrier:        syncx.NewSharedCalls(),
+		barrier:        syncx.NewSingleFlight(),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           NewStat("any"),
@@ -188,7 +216,7 @@ func TestCacheValueWithBigInt(t *testing.T) {
 	cn := cacheNode{
 		rds:            store,
 		r:              rand.New(rand.NewSource(time.Now().UnixNano())),
-		barrier:        syncx.NewSharedCalls(),
+		barrier:        syncx.NewSingleFlight(),
 		lock:           new(sync.Mutex),
 		unstableExpiry: mathx.NewUnstable(expiryDeviation),
 		stat:           NewStat("any"),

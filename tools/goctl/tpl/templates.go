@@ -2,59 +2,83 @@ package tpl
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/logrusorgru/aurora"
-	"github.com/tal-tech/go-zero/core/errorx"
-	"github.com/tal-tech/go-zero/tools/goctl/api/gogen"
-	"github.com/tal-tech/go-zero/tools/goctl/docker"
-	"github.com/tal-tech/go-zero/tools/goctl/kube"
-	mongogen "github.com/tal-tech/go-zero/tools/goctl/model/mongo/generate"
-	modelgen "github.com/tal-tech/go-zero/tools/goctl/model/sql/gen"
-	rpcgen "github.com/tal-tech/go-zero/tools/goctl/rpc/generator"
-	"github.com/tal-tech/go-zero/tools/goctl/util"
-	"github.com/urfave/cli"
+	"github.com/spf13/cobra"
+	"github.com/zeromicro/go-zero/core/errorx"
+	"github.com/zeromicro/go-zero/tools/goctl/api/apigen"
+	"github.com/zeromicro/go-zero/tools/goctl/api/gogen"
+	apinew "github.com/zeromicro/go-zero/tools/goctl/api/new"
+	"github.com/zeromicro/go-zero/tools/goctl/docker"
+	"github.com/zeromicro/go-zero/tools/goctl/kube"
+	mongogen "github.com/zeromicro/go-zero/tools/goctl/model/mongo/generate"
+	modelgen "github.com/zeromicro/go-zero/tools/goctl/model/sql/gen"
+	rpcgen "github.com/zeromicro/go-zero/tools/goctl/rpc/generator"
+	"github.com/zeromicro/go-zero/tools/goctl/util/pathx"
 )
 
 const templateParentPath = "/"
 
-// GenTemplates writes the latest template text into file which is not exists
-func GenTemplates(ctx *cli.Context) error {
+// genTemplates writes the latest template text into file which is not exists
+func genTemplates(_ *cobra.Command, _ []string) error {
+	path := varStringHome
+	if len(path) != 0 {
+		pathx.RegisterGoctlHome(path)
+	}
+
 	if err := errorx.Chain(
 		func() error {
-			return gogen.GenTemplates(ctx)
+			return gogen.GenTemplates()
 		},
 		func() error {
-			return modelgen.GenTemplates(ctx)
+			return modelgen.GenTemplates()
 		},
 		func() error {
-			return rpcgen.GenTemplates(ctx)
+			return rpcgen.GenTemplates()
 		},
 		func() error {
-			return docker.GenTemplates(ctx)
+			return docker.GenTemplates()
 		},
 		func() error {
-			return kube.GenTemplates(ctx)
+			return kube.GenTemplates()
 		},
 		func() error {
-			return mongogen.Templates(ctx)
+			return mongogen.Templates()
+		},
+		func() error {
+			return apigen.GenTemplates()
+		},
+		func() error {
+			return apinew.GenTemplates()
 		},
 	); err != nil {
 		return err
 	}
 
-	dir, err := util.GetTemplateDir(templateParentPath)
+	dir, err := pathx.GetTemplateDir(templateParentPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Templates are generated in %s, %s\n", aurora.Green(dir),
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Templates are generated in %s, %s\n", aurora.Green(abs),
 		aurora.Red("edit on your risk!"))
 
 	return nil
 }
 
-// CleanTemplates deletes all templates
-func CleanTemplates(_ *cli.Context) error {
+// cleanTemplates deletes all templates
+func cleanTemplates(_ *cobra.Command, _ []string) error {
+	path := varStringHome
+	if len(path) != 0 {
+		pathx.RegisterGoctlHome(path)
+	}
+
 	err := errorx.Chain(
 		func() error {
 			return gogen.Clean()
@@ -74,19 +98,30 @@ func CleanTemplates(_ *cli.Context) error {
 		func() error {
 			return mongogen.Clean()
 		},
+		func() error {
+			return apigen.Clean()
+		},
+		func() error {
+			return apinew.Clean()
+		},
 	)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("%s\n", aurora.Green("template are clean!"))
+	fmt.Printf("%s\n", aurora.Green("templates are cleaned!"))
 	return nil
 }
 
-// UpdateTemplates writes the latest template text into file,
+// updateTemplates writes the latest template text into file,
 // it will delete the older templates if there are exists
-func UpdateTemplates(ctx *cli.Context) (err error) {
-	category := ctx.String("category")
+func updateTemplates(_ *cobra.Command, _ []string) (err error) {
+	path := varStringHome
+	category := varStringCategory
+	if len(path) != 0 {
+		pathx.RegisterGoctlHome(path)
+	}
+
 	defer func() {
 		if err == nil {
 			fmt.Println(aurora.Green(fmt.Sprintf("%s template are update!", category)).String())
@@ -105,16 +140,25 @@ func UpdateTemplates(ctx *cli.Context) (err error) {
 		return modelgen.Update()
 	case mongogen.Category():
 		return mongogen.Update()
+	case apigen.Category():
+		return apigen.Update()
+	case apinew.Category():
+		return apinew.Update()
 	default:
 		err = fmt.Errorf("unexpected category: %s", category)
 		return
 	}
 }
 
-// RevertTemplates will overwrite the old template content with the new template
-func RevertTemplates(ctx *cli.Context) (err error) {
-	category := ctx.String("category")
-	filename := ctx.String("name")
+// revertTemplates will overwrite the old template content with the new template
+func revertTemplates(_ *cobra.Command, _ []string) (err error) {
+	path := varStringHome
+	category := varStringCategory
+	filename := varStringName
+	if len(path) != 0 {
+		pathx.RegisterGoctlHome(path)
+	}
+
 	defer func() {
 		if err == nil {
 			fmt.Println(aurora.Green(fmt.Sprintf("%s template are reverted!", filename)).String())
@@ -133,6 +177,10 @@ func RevertTemplates(ctx *cli.Context) (err error) {
 		return modelgen.RevertTemplate(filename)
 	case mongogen.Category():
 		return mongogen.RevertTemplate(filename)
+	case apigen.Category():
+		return apigen.RevertTemplate(filename)
+	case apinew.Category():
+		return apinew.RevertTemplate(filename)
 	default:
 		err = fmt.Errorf("unexpected category: %s", category)
 		return

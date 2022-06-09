@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"unicode"
 
-	"github.com/tal-tech/go-zero/tools/goctl/api/parser/g4/ast"
-	"github.com/tal-tech/go-zero/tools/goctl/api/parser/g4/gen/api"
-	"github.com/tal-tech/go-zero/tools/goctl/api/spec"
+	"github.com/zeromicro/go-zero/tools/goctl/api/parser/g4/ast"
+	"github.com/zeromicro/go-zero/tools/goctl/api/parser/g4/gen/api"
+	"github.com/zeromicro/go-zero/tools/goctl/api/spec"
 )
 
 type parser struct {
@@ -17,8 +17,30 @@ type parser struct {
 
 // Parse parses the api file
 func Parse(filename string) (*spec.ApiSpec, error) {
-	astParser := ast.NewParser(ast.WithParserPrefix(filepath.Base(filename)))
+	astParser := ast.NewParser(ast.WithParserPrefix(filepath.Base(filename)), ast.WithParserDebug())
 	ast, err := astParser.Parse(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	spec := new(spec.ApiSpec)
+	p := parser{ast: ast, spec: spec}
+	err = p.convert2Spec()
+	if err != nil {
+		return nil, err
+	}
+
+	return spec, nil
+}
+
+func parseContent(content string, skipCheckTypeDeclaration bool, filename ...string) (*spec.ApiSpec, error) {
+	var astParser *ast.Parser
+	if skipCheckTypeDeclaration {
+		astParser = ast.NewParser(ast.WithParserSkipCheckTypeDeclaration())
+	} else {
+		astParser = ast.NewParser()
+	}
+	ast, err := astParser.ParseContent(content, filename...)
 	if err != nil {
 		return nil, err
 	}
@@ -35,20 +57,12 @@ func Parse(filename string) (*spec.ApiSpec, error) {
 
 // ParseContent parses the api content
 func ParseContent(content string, filename ...string) (*spec.ApiSpec, error) {
-	astParser := ast.NewParser()
-	ast, err := astParser.ParseContent(content, filename...)
-	if err != nil {
-		return nil, err
-	}
+	return parseContent(content, false, filename...)
+}
 
-	spec := new(spec.ApiSpec)
-	p := parser{ast: ast, spec: spec}
-	err = p.convert2Spec()
-	if err != nil {
-		return nil, err
-	}
-
-	return spec, nil
+// ParseContentWithParserSkipCheckTypeDeclaration parses the api content with skip check type declaration
+func ParseContentWithParserSkipCheckTypeDeclaration(content string, filename ...string) (*spec.ApiSpec, error) {
+	return parseContent(content, true, filename...)
 }
 
 func (p parser) convert2Spec() error {
@@ -64,9 +78,8 @@ func (p parser) convert2Spec() error {
 }
 
 func (p parser) fillInfo() {
-	properties := make(map[string]string, 0)
+	properties := make(map[string]string)
 	if p.ast.Info != nil {
-		p.spec.Info = spec.Info{}
 		for _, kv := range p.ast.Info.Kvs {
 			properties[kv.Key.Text()] = kv.Value.Text()
 		}
@@ -258,7 +271,7 @@ func (p parser) fillService() error {
 				route.ResponseType = p.astTypeToSpec(astRoute.Route.Reply.Name)
 			}
 			if astRoute.AtDoc != nil {
-				properties := make(map[string]string, 0)
+				properties := make(map[string]string)
 				for _, kv := range astRoute.AtDoc.Kv {
 					properties[kv.Key.Text()] = kv.Value.Text()
 				}
@@ -277,7 +290,7 @@ func (p parser) fillService() error {
 
 			name := item.ServiceApi.Name.Text()
 			if len(p.spec.Service.Name) > 0 && p.spec.Service.Name != name {
-				return fmt.Errorf("mulit service name defined %s and %s", name, p.spec.Service.Name)
+				return fmt.Errorf("multiple service names defined %s and %s", name, p.spec.Service.Name)
 			}
 			p.spec.Service.Name = name
 		}
@@ -290,7 +303,7 @@ func (p parser) fillService() error {
 
 func (p parser) fillRouteAtServer(astRoute *ast.ServiceRoute, route *spec.Route) error {
 	if astRoute.AtServer != nil {
-		properties := make(map[string]string, 0)
+		properties := make(map[string]string)
 		for _, kv := range astRoute.AtServer.Kv {
 			properties[kv.Key.Text()] = kv.Value.Text()
 		}
@@ -314,7 +327,7 @@ func (p parser) fillRouteAtServer(astRoute *ast.ServiceRoute, route *spec.Route)
 
 func (p parser) fillAtServer(item *ast.Service, group *spec.Group) {
 	if item.AtServer != nil {
-		properties := make(map[string]string, 0)
+		properties := make(map[string]string)
 		for _, kv := range item.AtServer.Kv {
 			properties[kv.Key.Text()] = kv.Value.Text()
 		}

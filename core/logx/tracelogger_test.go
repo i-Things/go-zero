@@ -2,115 +2,219 @@ package logx
 
 import (
 	"context"
-	"log"
+	"encoding/json"
+	"io"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tal-tech/go-zero/core/trace/tracespec"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
-
-const (
-	mockTraceID = "mock-trace-id"
-	mockSpanID  = "mock-span-id"
-)
-
-var mock tracespec.Trace = new(mockTrace)
 
 func TestTraceLog(t *testing.T) {
-	var buf mockWriter
-	atomic.StoreUint32(&initialized, 1)
-	ctx := context.WithValue(context.Background(), tracespec.TracingKey, mock)
-	WithContext(ctx).(*traceLogger).write(&buf, levelInfo, testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
+	SetLevel(InfoLevel)
+	w := new(mockWriter)
+	old := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(old)
+	}()
+
+	otp := otel.GetTracerProvider()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(otp)
+
+	ctx, span := tp.Tracer("foo").Start(context.Background(), "bar")
+	defer span.End()
+
+	WithContext(ctx).Info(testlog)
+	validate(t, w.String(), true, true)
 }
 
 func TestTraceError(t *testing.T) {
-	var buf mockWriter
-	atomic.StoreUint32(&initialized, 1)
-	errorLog = newLogWriter(log.New(&buf, "", flags))
-	ctx := context.WithValue(context.Background(), tracespec.TracingKey, mock)
-	l := WithContext(ctx).(*traceLogger)
-	SetLevel(InfoLevel)
+	w := new(mockWriter)
+	old := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(old)
+	}()
+
+	otp := otel.GetTracerProvider()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(otp)
+
+	ctx, span := tp.Tracer("foo").Start(context.Background(), "bar")
+	defer span.End()
+
+	var nilCtx context.Context
+	l := WithContext(context.Background())
+	l = l.WithContext(nilCtx)
+	l = l.WithContext(ctx)
+	SetLevel(ErrorLevel)
 	l.WithDuration(time.Second).Error(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
-	buf.Reset()
+	validate(t, w.String(), true, true)
+	w.Reset()
 	l.WithDuration(time.Second).Errorf(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Errorv(testlog)
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Errorw(testlog, Field("foo", "bar"))
+	validate(t, w.String(), true, true)
+	assert.True(t, strings.Contains(w.String(), "foo"), w.String())
+	assert.True(t, strings.Contains(w.String(), "bar"), w.String())
 }
 
 func TestTraceInfo(t *testing.T) {
-	var buf mockWriter
-	atomic.StoreUint32(&initialized, 1)
-	infoLog = newLogWriter(log.New(&buf, "", flags))
-	ctx := context.WithValue(context.Background(), tracespec.TracingKey, mock)
-	l := WithContext(ctx).(*traceLogger)
+	w := new(mockWriter)
+	old := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(old)
+	}()
+
+	otp := otel.GetTracerProvider()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(otp)
+
+	ctx, span := tp.Tracer("foo").Start(context.Background(), "bar")
+	defer span.End()
+
+	SetLevel(InfoLevel)
+	l := WithContext(ctx)
+	l.WithDuration(time.Second).Info(testlog)
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Infof(testlog)
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Infov(testlog)
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Infow(testlog, Field("foo", "bar"))
+	validate(t, w.String(), true, true)
+	assert.True(t, strings.Contains(w.String(), "foo"), w.String())
+	assert.True(t, strings.Contains(w.String(), "bar"), w.String())
+}
+
+func TestTraceInfoConsole(t *testing.T) {
+	old := atomic.SwapUint32(&encoding, jsonEncodingType)
+	defer atomic.StoreUint32(&encoding, old)
+
+	w := new(mockWriter)
+	o := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(o)
+	}()
+
+	otp := otel.GetTracerProvider()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(otp)
+
+	ctx, span := tp.Tracer("foo").Start(context.Background(), "bar")
+	defer span.End()
+
+	l := WithContext(ctx)
 	SetLevel(InfoLevel)
 	l.WithDuration(time.Second).Info(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
-	buf.Reset()
+	validate(t, w.String(), true, true)
+	w.Reset()
 	l.WithDuration(time.Second).Infof(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Infov(testlog)
+	validate(t, w.String(), true, true)
 }
 
 func TestTraceSlow(t *testing.T) {
-	var buf mockWriter
-	atomic.StoreUint32(&initialized, 1)
-	slowLog = newLogWriter(log.New(&buf, "", flags))
-	ctx := context.WithValue(context.Background(), tracespec.TracingKey, mock)
-	l := WithContext(ctx).(*traceLogger)
+	w := new(mockWriter)
+	old := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(old)
+	}()
+
+	otp := otel.GetTracerProvider()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	otel.SetTracerProvider(tp)
+	defer otel.SetTracerProvider(otp)
+
+	ctx, span := tp.Tracer("foo").Start(context.Background(), "bar")
+	defer span.End()
+
+	l := WithContext(ctx)
 	SetLevel(InfoLevel)
 	l.WithDuration(time.Second).Slow(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
-	buf.Reset()
+	assert.True(t, strings.Contains(w.String(), traceKey))
+	assert.True(t, strings.Contains(w.String(), spanKey))
+	w.Reset()
 	l.WithDuration(time.Second).Slowf(testlog)
-	assert.True(t, strings.Contains(buf.String(), mockTraceID))
-	assert.True(t, strings.Contains(buf.String(), mockSpanID))
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Slowv(testlog)
+	validate(t, w.String(), true, true)
+	w.Reset()
+	l.WithDuration(time.Second).Sloww(testlog, Field("foo", "bar"))
+	validate(t, w.String(), true, true)
+	assert.True(t, strings.Contains(w.String(), "foo"), w.String())
+	assert.True(t, strings.Contains(w.String(), "bar"), w.String())
 }
 
 func TestTraceWithoutContext(t *testing.T) {
-	var buf mockWriter
-	atomic.StoreUint32(&initialized, 1)
-	infoLog = newLogWriter(log.New(&buf, "", flags))
-	l := WithContext(context.Background()).(*traceLogger)
+	w := new(mockWriter)
+	old := writer.Swap(w)
+	writer.lock.RLock()
+	defer func() {
+		writer.lock.RUnlock()
+		writer.Store(old)
+	}()
+
+	l := WithContext(context.Background())
 	SetLevel(InfoLevel)
 	l.WithDuration(time.Second).Info(testlog)
-	assert.False(t, strings.Contains(buf.String(), mockTraceID))
-	assert.False(t, strings.Contains(buf.String(), mockSpanID))
-	buf.Reset()
+	validate(t, w.String(), false, false)
+	w.Reset()
 	l.WithDuration(time.Second).Infof(testlog)
-	assert.False(t, strings.Contains(buf.String(), mockTraceID))
-	assert.False(t, strings.Contains(buf.String(), mockSpanID))
+	validate(t, w.String(), false, false)
 }
 
-type mockTrace struct{}
+func validate(t *testing.T, body string, expectedTrace, expectedSpan bool) {
+	var val mockValue
+	dec := json.NewDecoder(strings.NewReader(body))
 
-func (t mockTrace) TraceId() string {
-	return mockTraceID
+	for {
+		var doc mockValue
+		err := dec.Decode(&doc)
+		if err == io.EOF {
+			// all done
+			break
+		}
+		if err != nil {
+			continue
+		}
+
+		val = doc
+	}
+
+	assert.Equal(t, expectedTrace, len(val.Trace) > 0, body)
+	assert.Equal(t, expectedSpan, len(val.Span) > 0, body)
 }
 
-func (t mockTrace) SpanId() string {
-	return mockSpanID
-}
-
-func (t mockTrace) Finish() {
-}
-
-func (t mockTrace) Fork(ctx context.Context, serviceName, operationName string) (context.Context, tracespec.Trace) {
-	return nil, nil
-}
-
-func (t mockTrace) Follow(ctx context.Context, serviceName, operationName string) (context.Context, tracespec.Trace) {
-	return nil, nil
-}
-
-func (t mockTrace) Visit(fn func(key, val string) bool) {
+type mockValue struct {
+	Trace string `json:"trace"`
+	Span  string `json:"span"`
 }
