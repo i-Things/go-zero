@@ -27,6 +27,11 @@ func (m *default{{.serviceName}}) {{.method}}(ctx context.Context{{if .hasReq}},
 	client := {{if .isCallPkgSameToGrpcPkg}}{{else}}{{.package}}.{{end}}New{{.rpcServiceName}}Client(m.cli.Conn())
 	return client.{{.method}}(ctx{{if .hasReq}}, in{{end}}, opts...)
 }
+
+{{if .hasComment}}{{.comment}}{{end}}
+func (d *direct{{.serviceName}}) {{.method}}(ctx context.Context{{if .hasReq}}, in *{{.pbRequest}}{{end}}, opts ...grpc.CallOption) ({{if .notStream}}*{{.pbResponse}}, {{else}}{{.streamBody}},{{end}} error) {
+	return d.svr.{{.method}}(ctx{{if .hasReq}}, in{{end}})
+}
 `
 )
 
@@ -72,6 +77,7 @@ func (g *Generator) GenCall(ctx DirContext, proto parser.Proto, cfg *conf.Config
 	}
 
 	pbPackage := fmt.Sprintf(`"%s"`, ctx.GetPb().Package)
+	svcPackage := fmt.Sprintf(`"%s"`, ctx.GetSvc().Package)
 	protoGoPackage := fmt.Sprintf(`"%s"`, ctx.GetProtoGo().Package)
 	if isCallPkgSameToGrpcPkg {
 		pbPackage = ""
@@ -84,6 +90,7 @@ func (g *Generator) GenCall(ctx DirContext, proto parser.Proto, cfg *conf.Config
 		"alias":          strings.Join(aliasKeys, pathx.NL),
 		"head":           head,
 		"filePackage":    dir.Base,
+		"svcPackage":     svcPackage,
 		"pbPackage":      pbPackage,
 		"protoGoPackage": protoGoPackage,
 		"serviceName":    stringx.From(service.Name).ToCamel(),
