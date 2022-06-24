@@ -2,9 +2,9 @@ package {{.PkgName}}
 
 import (
 	"net/http"
-	"github.com/i-Things/things/shared/errors"
+	{{if .HasRequest}}"github.com/i-Things/things/shared/errors"{{end}}
     "github.com/i-Things/things/shared/result"
-	"github.com/zeromicro/go-zero/rest/httpx"
+	{{if .HasRequest}}"github.com/zeromicro/go-zero/rest/httpx"{{end}}
 	{{.ImportPackages}}
 )
 
