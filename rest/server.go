@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/rest/chain"
 	"github.com/zeromicro/go-zero/rest/handler"
 	"github.com/zeromicro/go-zero/rest/httpx"
 	"github.com/zeromicro/go-zero/rest/internal/cors"
@@ -99,6 +100,14 @@ func (s *Server) Use(middleware Middleware) {
 func ToMiddleware(handler func(next http.Handler) http.Handler) Middleware {
 	return func(handle http.HandlerFunc) http.HandlerFunc {
 		return handler(handle).ServeHTTP
+	}
+}
+
+// WithChain returns a RunOption that uses the given chain to replace the default chain.
+// JWT auth middleware and the middlewares that added by svr.Use() will be appended.
+func WithChain(chn chain.Chain) RunOption {
+	return func(svr *Server) {
+		svr.ngin.chain = chn
 	}
 }
 
