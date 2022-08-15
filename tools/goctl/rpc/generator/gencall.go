@@ -91,7 +91,7 @@ func (g *Generator) genCallGroup(ctx DirContext, proto parser.Proto, cfg *conf.C
 					fmt.Sprintf("%s.%s", proto.PbPackage, parser.CamelCase(msgName))))
 			}
 		}
-
+		svcPackage := fmt.Sprintf(`"%s"`, ctx.GetSvc().Package)
 		pbPackage := fmt.Sprintf(`"%s"`, ctx.GetPb().Package)
 		protoGoPackage := fmt.Sprintf(`"%s"`, ctx.GetProtoGo().Package)
 		if isCallPkgSameToGrpcPkg {
@@ -106,7 +106,9 @@ func (g *Generator) genCallGroup(ctx DirContext, proto parser.Proto, cfg *conf.C
 			"alias":          strings.Join(aliasKeys, pathx.NL),
 			"head":           head,
 			"filePackage":    dir.Base,
+			"svcPackage":     svcPackage,
 			"pbPackage":      pbPackage,
+			"protoPbPackage": proto.PbPackage,
 			"protoGoPackage": protoGoPackage,
 			"serviceName":    stringx.From(service.Name).ToCamel(),
 			"functions":      strings.Join(functions, pathx.NL),
@@ -172,6 +174,7 @@ func (g *Generator) genCallInCompatibility(ctx DirContext, proto parser.Proto,
 		"filePackage":    dir.Base,
 		"svcPackage":     svcPackage,
 		"pbPackage":      pbPackage,
+		"protoPbPackage": proto.PbPackage,
 		"protoGoPackage": protoGoPackage,
 		"serviceName":    stringx.From(service.Name).ToCamel(),
 		"functions":      strings.Join(functions, pathx.NL),

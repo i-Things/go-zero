@@ -26,7 +26,7 @@ type (
 
 	direct{{.serviceName}} struct {
 		svcCtx *svc.ServiceContext
-		svr    {{.filePackage}}.{{.serviceName}}Server
+		svr    {{.protoPbPackage}}.{{.serviceName}}Server
 	}
 )
 
@@ -36,7 +36,7 @@ func New{{.serviceName}}(cli zrpc.Client) {{.serviceName}} {
 	}
 }
 
-func NewDirect{{.serviceName}}(svcCtx *svc.ServiceContext, svr {{.filePackage}}.{{.serviceName}}Server) {{.serviceName}} {
+func NewDirect{{.serviceName}}(svcCtx *svc.ServiceContext, svr {{.protoPbPackage}}.{{.serviceName}}Server) {{.serviceName}} {
 	return &direct{{.serviceName}}{
 		svr:    svr,
 		svcCtx: svcCtx,
