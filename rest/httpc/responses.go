@@ -1,6 +1,8 @@
 package httpc
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strings"
 
@@ -25,13 +27,26 @@ func ParseHeaders(resp *http.Response, val interface{}) error {
 
 // ParseJsonBody parses the response body, which should be in json content type.
 func ParseJsonBody(resp *http.Response, val interface{}) error {
-	if withJsonBody(resp) {
-		return mapping.UnmarshalJsonReader(resp.Body, val)
+	defer resp.Body.Close()
+
+	if isContentTypeJson(resp) {
+		if resp.ContentLength > 0 {
+			return mapping.UnmarshalJsonReader(resp.Body, val)
+		}
+
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, resp.Body); err != nil {
+			return err
+		}
+
+		if buf.Len() > 0 {
+			return mapping.UnmarshalJsonReader(&buf, val)
+		}
 	}
 
 	return mapping.UnmarshalJsonMap(nil, val)
 }
 
-func withJsonBody(r *http.Response) bool {
-	return r.ContentLength > 0 && strings.Contains(r.Header.Get(header.ContentType), header.ApplicationJson)
+func isContentTypeJson(r *http.Response) bool {
+	return strings.Contains(r.Header.Get(header.ContentType), header.ApplicationJson)
 }

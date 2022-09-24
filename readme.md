@@ -21,7 +21,7 @@ English | [简体中文](readme-cn.md)
 > 
 > `go install github.com/zeromicro/go-zero/tools/goctl@latest`
 > 
-> `goctl migrate —verbose —version v1.3.5`
+> `goctl migrate —verbose —version v1.4.0`
 
 ## 0. what is go-zero
 
@@ -258,6 +258,8 @@ go-zero enlisted in the [CNCF Cloud Native Landscape](https://landscape.cncf.io/
 ## Give a Star! ⭐
 
 If you like or are using this project to learn or start your solution, please give it a star. Thanks!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=zeromicro/go-zero&type=Date)](#go-zero)
 
 ## Buy me a coffee
 
