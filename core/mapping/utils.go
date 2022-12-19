@@ -10,11 +10,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/zeromicro/go-zero/core/lang"
 	"github.com/zeromicro/go-zero/core/stringx"
 )
 
 const (
 	defaultOption      = "default"
+	envOption          = "env"
+	inheritOption      = "inherit"
 	stringOption       = "string"
 	optionalOption     = "optional"
 	optionsOption      = "options"
@@ -62,22 +65,7 @@ func Deref(t reflect.Type) reflect.Type {
 
 // Repr returns the string representation of v.
 func Repr(v interface{}) string {
-	if v == nil {
-		return ""
-	}
-
-	// if func (v *Type) String() string, we can't use Elem()
-	switch vt := v.(type) {
-	case fmt.Stringer:
-		return vt.String()
-	}
-
-	val := reflect.ValueOf(v)
-	if val.Kind() == reflect.Ptr && !val.IsNil() {
-		val = val.Elem()
-	}
-
-	return reprOfValue(val)
+	return lang.Repr(v)
 }
 
 // ValidatePtr validates v if it's a valid pointer.
@@ -94,7 +82,14 @@ func ValidatePtr(v *reflect.Value) error {
 func convertType(kind reflect.Kind, str string) (interface{}, error) {
 	switch kind {
 	case reflect.Bool:
-		return str == "1" || strings.ToLower(str) == "true", nil
+		switch strings.ToLower(str) {
+		case "1", "true":
+			return true, nil
+		case "0", "false":
+			return false, nil
+		default:
+			return false, errTypeMismatch
+		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		intValue, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
@@ -215,8 +210,8 @@ func isRightInclude(b byte) (bool, error) {
 	}
 }
 
-func maybeNewValue(field reflect.StructField, value reflect.Value) {
-	if field.Type.Kind() == reflect.Ptr && value.IsNil() {
+func maybeNewValue(fieldType reflect.Type, value reflect.Value) {
+	if fieldType.Kind() == reflect.Ptr && value.IsNil() {
 		value.Set(reflect.New(value.Type().Elem()))
 	}
 }
@@ -335,6 +330,8 @@ func parseNumberRange(str string) (*numberRange, error) {
 
 func parseOption(fieldOpts *fieldOptions, fieldName, option string) error {
 	switch {
+	case option == inheritOption:
+		fieldOpts.Inherit = true
 	case option == stringOption:
 		fieldOpts.FromString = true
 	case strings.HasPrefix(option, optionalOption):
@@ -351,26 +348,33 @@ func parseOption(fieldOpts *fieldOptions, fieldName, option string) error {
 	case option == optionalOption:
 		fieldOpts.Optional = true
 	case strings.HasPrefix(option, optionsOption):
-		segs := strings.Split(option, equalToken)
-		if len(segs) != 2 {
-			return fmt.Errorf("field %s has wrong options", fieldName)
+		val, err := parseProperty(fieldName, optionsOption, option)
+		if err != nil {
+			return err
 		}
 
-		fieldOpts.Options = parseOptions(segs[1])
+		fieldOpts.Options = parseOptions(val)
 	case strings.HasPrefix(option, defaultOption):
-		segs := strings.Split(option, equalToken)
-		if len(segs) != 2 {
-			return fmt.Errorf("field %s has wrong default option", fieldName)
+		val, err := parseProperty(fieldName, defaultOption, option)
+		if err != nil {
+			return err
 		}
 
-		fieldOpts.Default = strings.TrimSpace(segs[1])
+		fieldOpts.Default = val
+	case strings.HasPrefix(option, envOption):
+		val, err := parseProperty(fieldName, envOption, option)
+		if err != nil {
+			return err
+		}
+
+		fieldOpts.EnvVar = val
 	case strings.HasPrefix(option, rangeOption):
-		segs := strings.Split(option, equalToken)
-		if len(segs) != 2 {
-			return fmt.Errorf("field %s has wrong range", fieldName)
+		val, err := parseProperty(fieldName, rangeOption, option)
+		if err != nil {
+			return err
 		}
 
-		nr, err := parseNumberRange(segs[1])
+		nr, err := parseNumberRange(val)
 		if err != nil {
 			return err
 		}
@@ -393,6 +397,15 @@ func parseOptions(val string) []string {
 	}
 
 	return strings.Split(val, optionSeparator)
+}
+
+func parseProperty(field, tag, val string) (string, error) {
+	segs := strings.Split(val, equalToken)
+	if len(segs) != 2 {
+		return "", fmt.Errorf("field %s has wrong %s", field, tag)
+	}
+
+	return strings.TrimSpace(segs[1]), nil
 }
 
 func parseSegments(val string) []string {
@@ -442,47 +455,6 @@ func parseSegments(val string) []string {
 	}
 
 	return segments
-}
-
-func reprOfValue(val reflect.Value) string {
-	switch vt := val.Interface().(type) {
-	case bool:
-		return strconv.FormatBool(vt)
-	case error:
-		return vt.Error()
-	case float32:
-		return strconv.FormatFloat(float64(vt), 'f', -1, 32)
-	case float64:
-		return strconv.FormatFloat(vt, 'f', -1, 64)
-	case fmt.Stringer:
-		return vt.String()
-	case int:
-		return strconv.Itoa(vt)
-	case int8:
-		return strconv.Itoa(int(vt))
-	case int16:
-		return strconv.Itoa(int(vt))
-	case int32:
-		return strconv.Itoa(int(vt))
-	case int64:
-		return strconv.FormatInt(vt, 10)
-	case string:
-		return vt
-	case uint:
-		return strconv.FormatUint(uint64(vt), 10)
-	case uint8:
-		return strconv.FormatUint(uint64(vt), 10)
-	case uint16:
-		return strconv.FormatUint(uint64(vt), 10)
-	case uint32:
-		return strconv.FormatUint(uint64(vt), 10)
-	case uint64:
-		return strconv.FormatUint(vt, 10)
-	case []byte:
-		return string(vt)
-	default:
-		return fmt.Sprint(val.Interface())
-	}
 }
 
 func setMatchedPrimitiveValue(kind reflect.Kind, value reflect.Value, v interface{}) error {

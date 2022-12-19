@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/timex"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/zeromicro/go-zero/internal/trace"
 )
 
 // WithCallerSkip returns a Logger with given caller skip.
@@ -123,6 +123,11 @@ func (l *richLogger) WithDuration(duration time.Duration) Logger {
 	return l
 }
 
+func (l *richLogger) WithFields(fields ...LogField) Logger {
+	l.fields = append(l.fields, fields...)
+	return l
+}
+
 func (l *richLogger) buildFields(fields ...LogField) []LogField {
 	fields = append(l.fields, fields...)
 	fields = append(fields, Field(callerKey, getCaller(callerDepth+l.callerSkip)))
@@ -131,12 +136,12 @@ func (l *richLogger) buildFields(fields ...LogField) []LogField {
 		return fields
 	}
 
-	traceID := traceIdFromContext(l.ctx)
+	traceID := trace.TraceIDFromContext(l.ctx)
 	if len(traceID) > 0 {
 		fields = append(fields, Field(traceKey, traceID))
 	}
 
-	spanID := spanIdFromContext(l.ctx)
+	spanID := trace.SpanIDFromContext(l.ctx)
 	if len(spanID) > 0 {
 		fields = append(fields, Field(spanKey, spanID))
 	}
@@ -173,22 +178,4 @@ func (l *richLogger) slow(v interface{}, fields ...LogField) {
 	if shallLog(ErrorLevel) {
 		getWriter().Slow(v, l.buildFields(fields...)...)
 	}
-}
-
-func spanIdFromContext(ctx context.Context) string {
-	spanCtx := trace.SpanContextFromContext(ctx)
-	if spanCtx.HasSpanID() {
-		return spanCtx.SpanID().String()
-	}
-
-	return ""
-}
-
-func traceIdFromContext(ctx context.Context) string {
-	spanCtx := trace.SpanContextFromContext(ctx)
-	if spanCtx.HasTraceID() {
-		return spanCtx.TraceID().String()
-	}
-
-	return ""
 }
