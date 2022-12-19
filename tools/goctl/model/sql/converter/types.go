@@ -47,6 +47,7 @@ var commonMysqlDataTypeMapInt = map[int]string{
 	parser.Time:      "string",
 	parser.Year:      "int64",
 	// string
+	parser.Point:           "string",
 	parser.Char:            "string",
 	parser.VarChar:         "string",
 	parser.NVarChar:        "string",
