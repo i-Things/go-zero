@@ -40,6 +40,7 @@ type (
 		NameOriginal    string
 		Name            stringx.String
 		DataType        string
+		ColumnDataType  parser.DataType
 		Comment         string
 		SeqInIndex      int
 		OrdinalPosition int
@@ -241,7 +242,7 @@ func convertColumns(columns []*parser.Column, primaryColumn string, strict bool)
 		field.Name = stringx.From(column.Name)
 		field.DataType = dataType
 		field.Comment = util.TrimNewLine(comment)
-
+		field.ColumnDataType = column.DataType
 		if field.Name.Source() == primaryColumn {
 			primaryKey = Primary{
 				Field: field,
