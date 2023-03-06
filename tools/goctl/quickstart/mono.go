@@ -61,7 +61,7 @@ func (m mono) createAPIProject() {
 	etcFile := filepath.Join(apiWorkDir, "etc", "greet.yaml")
 	logx.Must(ioutil.WriteFile(etcFile, []byte(apiEtcContent), 0o666))
 	logicFile := filepath.Join(apiWorkDir, "internal", "logic", "pinglogic.go")
-	svcFile := filepath.Join(apiWorkDir, "internal", "svc", "servicecontext.go")
+	svcFile := filepath.Join(apiWorkDir, "internal", "svc", "serviceContext.go")
 	configPath := filepath.Join(apiWorkDir, "internal", "config")
 	svcPath := filepath.Join(apiWorkDir, "internal", "svc")
 	typesPath := filepath.Join(apiWorkDir, "internal", "types")
