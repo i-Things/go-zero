@@ -2,6 +2,7 @@ package gen
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/zeromicro/go-zero/core/collection"
@@ -25,7 +26,7 @@ func genVars(table Table, withCache, postgreSql bool) (string, error) {
 	}
 
 	output, err := util.With("var").Parse(text).
-		GoFmt(true).Execute(map[string]interface{}{
+		GoFmt(true).Execute(map[string]any{
 		"lowerStartCamelObject": stringx.From(camel).Untitle(),
 		"upperStartCamelObject": camel,
 		"cacheKeys":             strings.Join(keys, "\n"),
@@ -43,7 +44,9 @@ func genVars(table Table, withCache, postgreSql bool) (string, error) {
 					set.AddStr(fmt.Sprintf("\"`%s`\"", c))
 				}
 			}
-			return strings.Join(set.KeysStr(), ", ")
+			list := set.KeysStr()
+			sort.Strings(list)
+			return strings.Join(list, ", ")
 		}(),
 	})
 	if err != nil {

@@ -8,6 +8,7 @@ package hello
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -70,7 +71,7 @@ func RegisterGreetServer(s grpc.ServiceRegistrar, srv GreetServer) {
 	s.RegisterService(&Greet_ServiceDesc, srv)
 }
 
-func _Greet_SayHello_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Greet_SayHello_Handler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(HelloReq)
 	if err := dec(in); err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func _Greet_SayHello_Handler(srv interface{}, ctx context.Context, dec func(inte
 		Server:     srv,
 		FullMethod: "/hello.Greet/SayHello",
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(GreetServer).SayHello(ctx, req.(*HelloReq))
 	}
 	return interceptor(ctx, in, info, handler)
