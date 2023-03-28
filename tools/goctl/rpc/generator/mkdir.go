@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"github.com/zeromicro/go-zero/tools/goctl/util/format"
 	"path/filepath"
 	"strings"
 
@@ -76,8 +75,7 @@ func mkdir(ctx *ctx.ProjectContext, proto parser.Proto, _ *conf.Config, c *ZRpcC
 
 	getChildPackage := func(parent, childPath string) (string, error) {
 		child := strings.TrimPrefix(childPath, parent)
-		name, _ := format.FileNamingFormat("goZero", child)
-		abs := filepath.Join(parent, name)
+		abs := filepath.Join(parent, strings.ToLower(child))
 		if c.Multiple {
 			if err := pathx.MkdirIfNotExist(abs); err != nil {
 				return "", err
