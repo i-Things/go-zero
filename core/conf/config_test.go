@@ -2,6 +2,7 @@ package conf
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,6 +121,24 @@ d = "abcd"
 		assert.Equal(t, 1, val.B)
 		assert.Equal(t, "FOO", val.C)
 		assert.Equal(t, "abcd", val.D)
+	}
+}
+
+func TestConfigWithLower(t *testing.T) {
+	text := `a = "foo"
+b = 1
+`
+	tmpfile, err := createTempFile(".toml", text)
+	assert.Nil(t, err)
+	defer os.Remove(tmpfile)
+
+	var val struct {
+		A string `json:"a"`
+		b int
+	}
+	if assert.NoError(t, Load(tmpfile, &val)) {
+		assert.Equal(t, "foo", val.A)
+		assert.Equal(t, 0, val.b)
 	}
 }
 
@@ -715,7 +734,7 @@ func Test_FieldOverwrite(t *testing.T) {
 			input := []byte(`{"Name": "hello"}`)
 			err := LoadFromJsonBytes(input, val)
 			assert.ErrorAs(t, err, &dupErr)
-			assert.Equal(t, newConflictKeyError("name").Error(), err.Error())
+			assert.Error(t, err)
 		}
 
 		validate(&St0{})
@@ -1022,22 +1041,22 @@ func TestLoadNamedFieldOverwritten(t *testing.T) {
 	})
 }
 
-func createTempFile(ext, text string) (string, error) {
-	tmpFile, err := os.CreateTemp(os.TempDir(), hash.Md5Hex([]byte(text))+"*"+ext)
-	if err != nil {
-		return "", err
-	}
+func TestLoadLowerMemberShouldNotConflict(t *testing.T) {
+	type (
+		Redis struct {
+			db uint
+		}
 
-	if err := os.WriteFile(tmpFile.Name(), []byte(text), os.ModeTemporary); err != nil {
-		return "", err
-	}
+		Config struct {
+			db uint
+			Redis
+		}
+	)
 
-	filename := tmpFile.Name()
-	if err = tmpFile.Close(); err != nil {
-		return "", err
-	}
-
-	return filename, nil
+	var c Config
+	assert.NoError(t, LoadFromJsonBytes([]byte(`{}`), &c))
+	assert.Zero(t, c.db)
+	assert.Zero(t, c.Redis.db)
 }
 
 func TestFillDefaultUnmarshal(t *testing.T) {
@@ -1079,7 +1098,7 @@ func TestFillDefaultUnmarshal(t *testing.T) {
 		assert.Equal(t, st.C, "c")
 	})
 
-	t.Run("has vaue", func(t *testing.T) {
+	t.Run("has value", func(t *testing.T) {
 		type St struct {
 			A string `json:",default=a"`
 			B string
@@ -1090,4 +1109,202 @@ func TestFillDefaultUnmarshal(t *testing.T) {
 		err := FillDefault(&st)
 		assert.Error(t, err)
 	})
+}
+
+func TestConfigWithJsonTag(t *testing.T) {
+	t.Run("map with value", func(t *testing.T) {
+		var input = []byte(`[Value]
+[Value.first]
+Email = "foo"
+[Value.second]
+Email = "bar"`)
+
+		type Value struct {
+			Email string
+		}
+
+		type Config struct {
+			ValueMap map[string]Value `json:"Value"`
+		}
+
+		var c Config
+		if assert.NoError(t, LoadFromTomlBytes(input, &c)) {
+			assert.Len(t, c.ValueMap, 2)
+		}
+	})
+
+	t.Run("map with ptr value", func(t *testing.T) {
+		var input = []byte(`[Value]
+[Value.first]
+Email = "foo"
+[Value.second]
+Email = "bar"`)
+
+		type Value struct {
+			Email string
+		}
+
+		type Config struct {
+			ValueMap map[string]*Value `json:"Value"`
+		}
+
+		var c Config
+		if assert.NoError(t, LoadFromTomlBytes(input, &c)) {
+			assert.Len(t, c.ValueMap, 2)
+		}
+	})
+
+	t.Run("map with optional", func(t *testing.T) {
+		var input = []byte(`[Value]
+[Value.first]
+Email = "foo"
+[Value.second]
+Email = "bar"`)
+
+		type Value struct {
+			Email string
+		}
+
+		type Config struct {
+			Value map[string]Value `json:",optional"`
+		}
+
+		var c Config
+		if assert.NoError(t, LoadFromTomlBytes(input, &c)) {
+			assert.Len(t, c.Value, 2)
+		}
+	})
+
+	t.Run("map with empty tag", func(t *testing.T) {
+		var input = []byte(`[Value]
+[Value.first]
+Email = "foo"
+[Value.second]
+Email = "bar"`)
+
+		type Value struct {
+			Email string
+		}
+
+		type Config struct {
+			Value map[string]Value `json:"  "`
+		}
+
+		var c Config
+		if assert.NoError(t, LoadFromTomlBytes(input, &c)) {
+			assert.Len(t, c.Value, 2)
+		}
+	})
+}
+
+func Test_getFullName(t *testing.T) {
+	assert.Equal(t, "a.b", getFullName("a", "b"))
+	assert.Equal(t, "a", getFullName("", "a"))
+}
+
+func Test_buildFieldsInfo(t *testing.T) {
+	type ParentSt struct {
+		Name string
+		M    map[string]int
+	}
+	tests := []struct {
+		name        string
+		t           reflect.Type
+		ok          bool
+		containsKey string
+	}{
+		{
+			name: "normal",
+			t:    reflect.TypeOf(struct{ A string }{}),
+			ok:   true,
+		},
+		{
+			name: "struct anonymous",
+			t: reflect.TypeOf(struct {
+				ParentSt
+				Name string
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("name").Error(),
+		},
+		{
+			name: "struct ptr anonymous",
+			t: reflect.TypeOf(struct {
+				*ParentSt
+				Name string
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("name").Error(),
+		},
+		{
+			name: "more struct anonymous",
+			t: reflect.TypeOf(struct {
+				Value struct {
+					ParentSt
+					Name string
+				}
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("value.name").Error(),
+		},
+		{
+			name: "map anonymous",
+			t: reflect.TypeOf(struct {
+				ParentSt
+				M string
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("m").Error(),
+		},
+		{
+			name: "map more anonymous",
+			t: reflect.TypeOf(struct {
+				Value struct {
+					ParentSt
+					M string
+				}
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("value.m").Error(),
+		},
+		{
+			name: "struct slice anonymous",
+			t: reflect.TypeOf([]struct {
+				ParentSt
+				Name string
+			}{}),
+			ok:          false,
+			containsKey: newConflictKeyError("name").Error(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := buildFieldsInfo(tt.t, "")
+			if tt.ok {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Equal(t, err.Error(), tt.containsKey)
+			}
+		})
+	}
+}
+
+func createTempFile(ext, text string) (string, error) {
+	tmpFile, err := os.CreateTemp(os.TempDir(), hash.Md5Hex([]byte(text))+"*"+ext)
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.WriteFile(tmpFile.Name(), []byte(text), os.ModeTemporary); err != nil {
+		return "", err
+	}
+
+	filename := tmpFile.Name()
+	if err = tmpFile.Close(); err != nil {
+		return "", err
+	}
+
+	return filename, nil
 }

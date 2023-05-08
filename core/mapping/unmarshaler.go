@@ -289,6 +289,10 @@ func (u *Unmarshaler) generateMap(keyType, elemType reflect.Type, mapValue any) 
 		return reflect.ValueOf(mapValue), nil
 	}
 
+	if keyType != valueType.Key() {
+		return emptyValue, errTypeMismatch
+	}
+
 	refValue := reflect.ValueOf(mapValue)
 	targetValue := reflect.MakeMapWithSize(mapType, refValue.Len())
 	dereffedElemType := Deref(elemType)
@@ -486,7 +490,7 @@ func (u *Unmarshaler) processAnonymousStructFieldOptional(fieldType reflect.Type
 	}
 
 	if filled && required != requiredFilled {
-		return fmt.Errorf("%s is not fully set", key)
+		return fmt.Errorf("%q is not fully set", key)
 	}
 
 	return nil
@@ -691,6 +695,10 @@ func (u *Unmarshaler) processFieldWithEnvValue(fieldType reflect.Type, value ref
 
 func (u *Unmarshaler) processNamedField(field reflect.StructField, value reflect.Value,
 	m valuerWithParent, fullName string) error {
+	if !field.IsExported() {
+		return nil
+	}
+
 	key, opts, err := u.parseOptionsWithContext(field, m, fullName)
 	if err != nil {
 		return err
@@ -715,7 +723,7 @@ func (u *Unmarshaler) processNamedField(field reflect.StructField, value reflect
 	// When fillDefault is used, m is a null value, hasValue must be false, all priority judgments fillDefault.
 	if u.opts.fillDefault {
 		if !value.IsZero() {
-			return fmt.Errorf("set the default value, %s must be zero", fullName)
+			return fmt.Errorf("set the default value, %q must be zero", fullName)
 		}
 		return u.processNamedFieldWithoutValue(field.Type, value, opts, fullName)
 	} else if !hasValue {
@@ -736,11 +744,11 @@ func (u *Unmarshaler) processNamedFieldWithValue(fieldType reflect.Type, value r
 			return nil
 		}
 
-		return fmt.Errorf("field %s mustn't be nil", key)
+		return fmt.Errorf("field %q mustn't be nil", key)
 	}
 
 	if !value.CanSet() {
-		return fmt.Errorf("field %s is not settable", key)
+		return fmt.Errorf("field %q is not settable", key)
 	}
 
 	maybeNewValue(fieldType, value)
@@ -784,7 +792,7 @@ func (u *Unmarshaler) processNamedFieldWithValueFromString(fieldType reflect.Typ
 		}
 
 		if !stringx.Contains(options, checkValue) {
-			return fmt.Errorf(`value "%s" for field "%s" is not defined in options "%v"`,
+			return fmt.Errorf(`value "%s" for field %q is not defined in options "%v"`,
 				mapValue, key, options)
 		}
 	}
@@ -810,6 +818,11 @@ func (u *Unmarshaler) processNamedFieldWithoutValue(fieldType reflect.Type, valu
 	}
 
 	if u.opts.fillDefault {
+		if fieldType.Kind() != reflect.Ptr && fieldKind == reflect.Struct {
+			return u.processFieldNotFromString(fieldType, value, valueWithParent{
+				value: emptyMap,
+			}, opts, fullName)
+		}
 		return nil
 	}
 
@@ -865,12 +878,14 @@ func (u *Unmarshaler) unmarshalWithFullName(m valuerWithParent, v any, fullName 
 
 	numFields := baseType.NumField()
 	for i := 0; i < numFields; i++ {
-		field := baseType.Field(i)
-		if !field.IsExported() {
-			continue
-		}
+		typeField := baseType.Field(i)
+		valueField := valElem.Field(i)
+		if err := u.processField(typeField, valueField, m, fullName); err != nil {
+			if len(fullName) > 0 {
+				err = fmt.Errorf("%w, fullName: %s, field: %s, type: %s",
+					err, fullName, typeField.Name, valueField.Type().Name())
+			}
 
-		if err := u.processField(field, valElem.Field(i), m, fullName); err != nil {
 			return err
 		}
 	}
@@ -1024,11 +1039,11 @@ func join(elem ...string) string {
 }
 
 func newInitError(name string) error {
-	return fmt.Errorf("field %s is not set", name)
+	return fmt.Errorf("field %q is not set", name)
 }
 
 func newTypeMismatchError(name string) error {
-	return fmt.Errorf("type mismatch for field %s", name)
+	return fmt.Errorf("type mismatch for field %q", name)
 }
 
 func readKeys(key string) []string {
