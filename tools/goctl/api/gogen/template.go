@@ -16,6 +16,7 @@ const (
 	mainTemplateFile            = "main.tpl"
 	middlewareImplementCodeFile = "middleware.tpl"
 	routesTemplateFile          = "routes.tpl"
+	wsTemplateFile              = "ws.tpl"
 	routesAdditionTemplateFile  = "route-addition.tpl"
 	typesTemplateFile           = "types.tpl"
 )
