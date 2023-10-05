@@ -43,6 +43,7 @@ func init() {
 	newCmdFlags.BoolVarP(&cli.VarBoolVerbose, "verbose", "v")
 	newCmdFlags.MarkHidden("go_opt")
 	newCmdFlags.MarkHidden("go-grpc_opt")
+	newCmdFlags.BoolVarP(&cli.VarBoolMultiple, "multiple", "m")
 
 	protocCmdFlags.BoolVarP(&cli.VarBoolMultiple, "multiple", "m")
 	protocCmdFlags.StringSliceVar(&cli.VarStringSliceGoOut, "go_out")

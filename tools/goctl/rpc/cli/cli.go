@@ -70,7 +70,11 @@ func RPCNew(_ *cobra.Command, args []string) error {
 	}
 
 	protoName := rpcname + ".proto"
-	filename := filepath.Join(".", rpcname, protoName)
+	filename := filepath.Join(".", rpcname, "proto", protoName)
+	svrDir, err := filepath.Abs(filepath.Join(".", rpcname))
+	if err != nil {
+		return err
+	}
 	src, err := filepath.Abs(filename)
 	if err != nil {
 		return err
@@ -82,12 +86,14 @@ func RPCNew(_ *cobra.Command, args []string) error {
 	}
 
 	var ctx generator.ZRpcContext
+	ctx.Multiple = VarBoolMultiple
 	ctx.Src = src
-	ctx.GoOutput = filepath.Dir(src)
-	ctx.GrpcOutput = filepath.Dir(src)
+	ctx.GoOutput = svrDir
+	ctx.GrpcOutput = svrDir
 	ctx.IsGooglePlugin = true
-	ctx.Output = filepath.Dir(src)
-	ctx.ProtocCmd = fmt.Sprintf("protoc -I=%s %s --go_out=%s --go-grpc_out=%s", filepath.Dir(src), filepath.Base(src), filepath.Dir(src), filepath.Dir(src))
+	ctx.Output = svrDir
+	ctx.ProtocCmd = fmt.Sprintf("protoc -I=%s %s --go_out=%s --go-grpc_out=%s",
+		filepath.Dir(src), filepath.Base(src), svrDir, svrDir)
 
 	grpcOptList := VarStringSliceGoGRPCOpt
 	if len(grpcOptList) > 0 {

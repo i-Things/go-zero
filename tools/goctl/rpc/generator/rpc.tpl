@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package {{.package}};
-option go_package="./{{.package}}";
+option go_package="pb/{{.package}}";
 
 message Request {
   string ping = 1;
