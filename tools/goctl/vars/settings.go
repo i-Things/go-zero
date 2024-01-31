@@ -5,7 +5,7 @@ const (
 	ProjectName = "zero"
 	// ProjectOpenSourceURL the github url of go-zero
 	ProjectOpenSourceURL        = "github.com/zeromicro/go-zero"
-	IThingsProjectOpenSourceURL = "github.com/i-Things/things"
+	IThingsProjectOpenSourceURL = "gitee.com/i-Things/core"
 	// OsWindows represents os windows
 	OsWindows = "windows"
 	// OsMac represents os mac

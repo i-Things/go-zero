@@ -26,7 +26,7 @@ const (
 package handler
 
 import (
-	ws "github.com/i-Things/things/shared/websocket"
+	ws "gitee.com/i-Things/core/shared/websocket"
 	"net/http"{{if .hasTimeout}}
 	"time"{{end}}
 
