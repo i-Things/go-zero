@@ -43,6 +43,7 @@ func init() {
 	newCmdFlags.BoolVarP(&cli.VarBoolVerbose, "verbose", "v")
 	newCmdFlags.MarkHidden("go_opt")
 	newCmdFlags.MarkHidden("go-grpc_opt")
+	newCmdFlags.BoolVarPWithDefaultValue(&cli.VarBoolClient, "client", "c", true)
 	newCmdFlags.BoolVarP(&cli.VarBoolMultiple, "multiple", "m")
 
 	protocCmdFlags.BoolVarP(&cli.VarBoolMultiple, "multiple", "m")
@@ -64,6 +65,7 @@ func init() {
 	protocCmdFlags.MarkHidden("go-grpc_opt")
 	protocCmdFlags.MarkHidden("plugin")
 	protocCmdFlags.MarkHidden("proto_path")
+	protocCmdFlags.BoolVarPWithDefaultValue(&cli.VarBoolClient, "client", "c", true)
 
 	templateCmdFlags.StringVar(&cli.VarStringOutput, "o")
 	templateCmdFlags.StringVar(&cli.VarStringHome, "home")

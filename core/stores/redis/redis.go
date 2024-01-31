@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	red "github.com/go-redis/redis/v8"
+	red "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/breaker"
 	"github.com/zeromicro/go-zero/core/errorx"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -64,8 +64,7 @@ type (
 	// RedisNode interface represents a redis node.
 	RedisNode interface {
 		red.Cmdable
-		Subscribe(channels ...string) *red.PubSub
-		PSubscribe(channels ...string) *red.PubSub
+		red.BitMapCmdable
 	}
 
 	// GeoLocation is used with GeoAdd to add geospatial location.
@@ -463,6 +462,33 @@ func (s *Redis) ExistsCtx(ctx context.Context, key string) (val bool, err error)
 		}
 
 		val = v == 1
+		return nil
+	}, acceptable)
+
+	return
+}
+
+// ExistsMany is the implementation of redis exists command.
+// checks the existence of multiple keys in Redis using the EXISTS command.
+func (s *Redis) ExistsMany(keys ...string) (int64, error) {
+	return s.ExistsManyCtx(context.Background(), keys...)
+}
+
+// ExistsManyCtx is the implementation of redis exists command.
+// checks the existence of multiple keys in Redis using the EXISTS command.
+func (s *Redis) ExistsManyCtx(ctx context.Context, keys ...string) (val int64, err error) {
+	err = s.brk.DoWithAcceptable(func() error {
+		conn, err := getRedis(s)
+		if err != nil {
+			return err
+		}
+
+		v, err := conn.Exists(ctx, keys...).Result()
+		if err != nil {
+			return err
+		}
+
+		val = v
 		return nil
 	}, acceptable)
 
@@ -1443,46 +1469,6 @@ func (s *Redis) PipelinedCtx(ctx context.Context, fn func(Pipeliner) error) erro
 	}, acceptable)
 }
 
-func (s *Redis) Publish(channel string, message interface{}) (val int64, err error) {
-	err = s.brk.DoWithAcceptable(func() error {
-		conn, err := getRedis(s)
-		if err != nil {
-			return err
-		}
-
-		val, err = conn.Publish(channel, message).Result()
-		return err
-	}, acceptable)
-
-	return
-}
-
-func (s *Redis) PSubscribe(channels ...string) (pubSub *red.PubSub, err error) {
-	err = s.brk.DoWithAcceptable(func() error {
-		conn, err := getRedis(s)
-		if err != nil {
-			return err
-		}
-		pubSub = conn.PSubscribe(channels...)
-		return nil
-	}, acceptable)
-
-	return
-}
-
-func (s *Redis) Subscribe(channels ...string) (pubSub *red.PubSub, err error) {
-	err = s.brk.DoWithAcceptable(func() error {
-		conn, err := getRedis(s)
-		if err != nil {
-			return err
-		}
-		pubSub = conn.Subscribe(channels...)
-		return nil
-	}, acceptable)
-
-	return
-}
-
 // Rpop is the implementation of redis rpop command.
 func (s *Redis) Rpop(key string) (string, error) {
 	return s.RpopCtx(context.Background(), key)
@@ -2035,7 +2021,13 @@ func (s *Redis) TtlCtx(ctx context.Context, key string) (val int, err error) {
 			return err
 		}
 
-		val = int(duration / time.Second)
+		if duration >= 0 {
+			val = int(duration / time.Second)
+		} else {
+			// -2 means key does not exist
+			// -1 means key exists but has no expire
+			val = int(duration)
+		}
 		return nil
 	}, acceptable)
 
@@ -2067,7 +2059,7 @@ func (s *Redis) ZaddFloatCtx(ctx context.Context, key string, score float64, val
 			return err
 		}
 
-		v, err := conn.ZAdd(ctx, key, &red.Z{
+		v, err := conn.ZAdd(ctx, key, red.Z{
 			Score:  score,
 			Member: value,
 		}).Result()
@@ -2095,9 +2087,9 @@ func (s *Redis) ZaddsCtx(ctx context.Context, key string, ps ...Pair) (val int64
 			return err
 		}
 
-		var zs []*red.Z
+		var zs []red.Z
 		for _, p := range ps {
-			z := &red.Z{Score: float64(p.Score), Member: p.Key}
+			z := red.Z{Score: float64(p.Score), Member: p.Key}
 			zs = append(zs, z)
 		}
 
@@ -2891,7 +2883,7 @@ func withHook(hook red.Hook) Option {
 }
 
 func acceptable(err error) bool {
-	return err == nil || err == red.Nil || err == context.Canceled
+	return err == nil || err == red.Nil || errors.Is(err, context.Canceled)
 }
 
 func getRedis(r *Redis) (RedisNode, error) {
