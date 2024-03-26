@@ -30,7 +30,7 @@ func (m *default{{.serviceName}}) {{.method}}(ctx context.Context{{if .hasReq}},
 
 {{if .hasComment}}{{.comment}}{{end}}
 func (d *direct{{.serviceName}}) {{.method}}(ctx context.Context{{if .hasReq}}, in *{{.pbRequest}}{{end}}, opts ...grpc.CallOption) ({{if .notStream}}*{{.pbResponse}}, {{else}}{{.streamBody}},{{end}} error) {
-	return d.svr.{{.method}}(ctx{{if .hasReq}}, in{{end}})
+	{{if .notStream}}return d.svr.{{.method}}(ctx{{if .hasReq}}, in{{end}}){{else}}return nil,nil//todo{{end}}
 }
 `
 )

@@ -18,6 +18,16 @@
         "hostname": "hostname of the server",
         "scheme": "scheme of the server"
       },
+      "swagger": {
+        "short": "生成swagger文件",
+        "dir": "{{.goctl.api.dir}}",
+        "api": "{{.goctl.api.api}}",
+        "style": "{{.global.style}}",
+        "basepath": "基础地址",
+        "hostname": "指定hostname",
+        "schemes": "https,wss",
+        "filename": "生成的文件名"
+      },
       "doc": {
         "short": "Generate doc files",
         "dir": "{{.goctl.api.dir}}",
