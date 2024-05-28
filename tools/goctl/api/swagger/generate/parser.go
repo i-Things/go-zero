@@ -154,6 +154,7 @@ func renderServiceRoutes(service spec.Service, groups []spec.Group, paths swagge
 				pathParamMap             = make(map[string]swaggerParameterObject)
 				parameters               swaggerParametersObject
 				hasBody                  bool
+				hasFile                  bool
 				containForm, containJson bool
 			)
 
@@ -224,9 +225,10 @@ func renderServiceRoutes(service spec.Service, groups []spec.Group, paths swagge
 						// If there is a file key in the @doc, add the file parameter, and the parameter will be changed to formData
 						// Example:
 						// @doc(
-						// 	inject_formdata_param: "file"
+						// 	injectFormdataParam: "file"
 						// )
-						if fileKey, ok := route.AtDoc.Properties["inject_formdata_param"]; ok {
+						if fileKey, ok := route.AtDoc.Properties["injectFormdataParam"]; ok {
+							hasFile = true
 							// First, add a file parameter to the form data
 							fileParameter := swaggerParameterObject{
 								Name:     strings.Trim(fileKey, "\""),
@@ -361,7 +363,10 @@ func renderServiceRoutes(service spec.Service, groups []spec.Group, paths swagge
 			// if request has body, there is no way to distinguish query param and form param.
 			// because they both share the "form" tag, the same param will appear in both query and body.
 			if hasBody && containForm && !containJson {
-				operationObject.Consumes = []string{"multipart/form-data", "application/x-www-form-urlencoded"}
+				operationObject.Consumes = []string{"multipart/form-data"}
+				if !hasFile {
+					operationObject.Consumes = []string{"application/x-www-form-urlencoded"}
+				}
 			}
 
 			for _, v := range route.Doc {
