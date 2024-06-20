@@ -28,5 +28,6 @@ func Do(filename string, host string, basePath string, schemes string, in *plugi
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Printf("写入swagger文件完成:%v  err:%v \n", output, err)
 	return err
 }

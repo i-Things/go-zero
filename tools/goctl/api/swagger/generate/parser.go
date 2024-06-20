@@ -34,6 +34,7 @@ const (
 	tagKeyPath     = "path"
 	tagKeyForm     = "form"
 	tagKeyJson     = "json"
+	tagKeyString   = "string"
 	tagKeyValidate = "validate"
 )
 
@@ -252,8 +253,12 @@ func renderServiceRoutes(service spec.Service, groups []spec.Group, paths swagge
 								}
 
 								// Obtain the parameter type
-								tempKind := swaggerMapTypes[strings.Replace(member.Type.Name(), "[]", "", -1)]
-								ftype, format, ok := primitiveSchema(tempKind, member.Type.Name())
+								tName := member.Type.Name()
+								if strings.Contains(member.Tag, ",string") {
+									tName = "string"
+								}
+								tempKind := swaggerMapTypes[strings.Replace(tName, "[]", "", -1)]
+								ftype, format, ok := primitiveSchema(tempKind, tName)
 								if !ok {
 									ftype = tempKind.String()
 									format = "UNKNOWN"
@@ -660,8 +665,7 @@ func renderReplyAsDefinition(d swaggerDefinitionsObject, m messageMap, p []spec.
 
 		schema.Title = defineStruct.Name()
 
-		for _, member := range defineStruct.Members {
-			collectProperties(schema.Properties, &formFields, &untaggedFields, member)
+		for i, member := range defineStruct.Members {
 			for _, tag := range member.Tags() {
 				if tag.Key != tagKeyForm && tag.Key != tagKeyJson {
 					continue
@@ -681,12 +685,18 @@ func renderReplyAsDefinition(d swaggerDefinitionsObject, m messageMap, p []spec.
 					if strings.HasPrefix(option, optionalOption) || strings.HasPrefix(option, omitemptyOption) {
 						required = false
 					}
+					if option == tagKeyString {
+						member.Type = toString(member.Type)
+						defineStruct.Members[i] = member
+					}
 				}
 
 				if required && !contains(schema.Required, tag.Name) {
 					schema.Required = append(schema.Required, tag.Name)
 				}
 			}
+			collectProperties(schema.Properties, &formFields, &untaggedFields, member)
+
 		}
 		// if there exists any json fields, form fields are ignored (considered to be params in query).
 		if len(*schema.Properties) == 0 && len(formFields) > 0 {
@@ -698,6 +708,32 @@ func renderReplyAsDefinition(d swaggerDefinitionsObject, m messageMap, p []spec.
 
 		d[i2.Name()] = schema
 	}
+}
+
+var set = map[string]struct{}{}
+
+func toString(t spec.Type) spec.Type {
+	if _, ok := set[t.Name()]; !ok {
+		fmt.Println("转换成string类型的有:" + t.Name())
+		set[t.Name()] = struct{}{}
+	}
+	switch t.(type) {
+	case spec.PrimitiveType:
+		pt := t.(spec.PrimitiveType)
+		pt.RawName = "string"
+		t = pt
+		return t
+	case spec.PointerType:
+		t = spec.PointerType{RawName: "*string", Type: spec.PrimitiveType{RawName: "string"}}
+		return t
+	case spec.ArrayType:
+		pt := t.(spec.ArrayType)
+		t = spec.ArrayType{RawName: "[]string", Value: toString(pt.Value)}
+		return t
+	default:
+		fmt.Println("不支持")
+	}
+	return t
 }
 
 func collectProperties(jsonFields, formFields, untaggedFields *swaggerSchemaObjectProperties, member spec.Member) {
