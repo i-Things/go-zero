@@ -9,8 +9,8 @@ import (
 	"github.com/zeromicro/go-zero/tools/goctl/plugin"
 )
 
-func Do(filename string, host string, basePath string, schemes string, in *plugin.Plugin) error {
-	swagger, err := applyGenerate(in, host, basePath, schemes)
+func Do(filename string, host string, basePath string, in *plugin.Plugin) error {
+	access, err := applyGenerate(in, host, basePath)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -18,7 +18,7 @@ func Do(filename string, host string, basePath string, schemes string, in *plugi
 	enc := json.NewEncoder(&formatted)
 	enc.SetIndent("", "  ")
 
-	if err := enc.Encode(swagger); err != nil {
+	if err := enc.Encode(access); err != nil {
 		fmt.Println(err)
 	}
 
@@ -28,6 +28,6 @@ func Do(filename string, host string, basePath string, schemes string, in *plugi
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Printf("写入swagger文件完成:%v  err:%v \n", output, err)
+	fmt.Printf("写入access文件完成:%v  err:%v \n", output, err)
 	return err
 }

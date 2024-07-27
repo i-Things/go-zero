@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/zeromicro/go-zero/tools/goctl/api/access"
 	"github.com/zeromicro/go-zero/tools/goctl/api/apigen"
 	"github.com/zeromicro/go-zero/tools/goctl/api/dartgen"
 	"github.com/zeromicro/go-zero/tools/goctl/api/docgen"
@@ -33,6 +34,7 @@ var (
 	pluginCmd   = cobrax.NewCommand("plugin", cobrax.WithRunE(plugin.PluginCommand))
 	tsCmd       = cobrax.NewCommand("ts", cobrax.WithRunE(tsgen.TsCommand))
 	swaggerCmd  = cobrax.NewCommand("swagger", cobrax.WithRunE(swagger.SwaggerCommand))
+	accessCmd   = cobrax.NewCommand("access", cobrax.WithRunE(access.AccessCommand))
 )
 
 func init() {
@@ -49,6 +51,7 @@ func init() {
 		tsCmdFlags       = tsCmd.Flags()
 		validateCmdFlags = validateCmd.Flags()
 		swaggerCmdFlags  = swaggerCmd.Flags()
+		accessCmdFlags   = accessCmd.Flags()
 	)
 	swaggerCmdFlags.StringVar(&swagger.VarStringFilename, "filename")
 	swaggerCmdFlags.StringVar(&swagger.VarStringBasepath, "basepath")
@@ -57,6 +60,12 @@ func init() {
 	swaggerCmdFlags.StringVar(&swagger.VarStringDir, "dir")
 	swaggerCmdFlags.StringVar(&swagger.VarStringAPI, "api")
 	swaggerCmdFlags.StringVar(&swagger.VarStringStyle, "style")
+
+	accessCmdFlags.StringVar(&access.VarStringFilename, "filename")
+	accessCmdFlags.StringVar(&access.VarStringBasepath, "basepath")
+	accessCmdFlags.StringVar(&access.VarStringHost, "host")
+	accessCmdFlags.StringVar(&access.VarStringDir, "dir")
+	accessCmdFlags.StringVar(&access.VarStringAPI, "api")
 
 	apiCmdFlags.StringVar(&apigen.VarStringOutput, "o")
 	apiCmdFlags.StringVar(&apigen.VarStringHome, "home")
@@ -110,5 +119,5 @@ func init() {
 	validateCmdFlags.StringVar(&validate.VarStringAPI, "api")
 
 	// Add sub-commands
-	Cmd.AddCommand(dartCmd, swaggerCmd, docCmd, formatCmd, goCmd, javaCmd, ktCmd, newCmd, pluginCmd, tsCmd, validateCmd)
+	Cmd.AddCommand(dartCmd, swaggerCmd, accessCmd, docCmd, formatCmd, goCmd, javaCmd, ktCmd, newCmd, pluginCmd, tsCmd, validateCmd)
 }
