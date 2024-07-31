@@ -15,6 +15,8 @@ const (
 	accessCodePrefix = "accessCodePrefix"
 	accessNamePrefix = "accessNamePrefix"
 	accessGroup      = "accessGroup"
+	defaultNeedAuth  = "defaultNeedAuth"
+	defaultAuthType  = "defaultAuthType"
 )
 
 // （1(add)新增 2修改(modify) 3删除(delete) 4查询(find) 5其它(other)
@@ -95,6 +97,8 @@ func applyGenerate(p *plugin.Plugin, host string, basePath string) (*Access, err
 			Group:      Unquote(properties[accessGroup]),
 			IsNeedAuth: 1,
 		}
+		authType := Unquote(properties[defaultAuthType])
+		isNeedAuth := BoolToInt(Unquote(properties[defaultNeedAuth]))
 		for _, r := range g.Routes {
 			path := g.GetAnnotation("prefix") + r.Path
 			if path[0] != '/' {
@@ -107,8 +111,20 @@ func applyGenerate(p *plugin.Plugin, host string, basePath string) (*Access, err
 				Route:        path,
 				Name:         Unquote(r.AtDoc.Properties["summary"]),
 				BusinessType: bt,
-				AuthType:     Unquote(r.AtDoc.Properties["authType"]),
-				IsNeedAuth:   BoolToInt(Unquote(r.AtDoc.Properties["isNeedAuth"])),
+				AuthType: func() string {
+					at := Unquote(r.AtDoc.Properties["authType"])
+					if at != "" {
+						return at
+					}
+					return authType
+				}(),
+				IsNeedAuth: func() int64 {
+					nt := Unquote(r.AtDoc.Properties["isNeedAuth"])
+					if nt != "" {
+						return BoolToInt(nt)
+					}
+					return isNeedAuth
+				}(),
 			}
 			if ai.Name == "" {
 				ai.Name = Unquote(r.AtDoc.Text)
