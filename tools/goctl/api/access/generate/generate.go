@@ -13,6 +13,7 @@ func Do(filename string, host string, basePath string, in *plugin.Plugin) error 
 	access, err := applyGenerate(in, host, basePath)
 	if err != nil {
 		fmt.Println(err)
+		return err
 	}
 	var formatted bytes.Buffer
 	enc := json.NewEncoder(&formatted)
