@@ -38,6 +38,7 @@ type (
 	Field struct {
 		NameOriginal    string
 		Name            stringx.String
+		ThirdPkg        string
 		DataType        string
 		ColumnDataType  parser.DataType
 		Comment         string
@@ -220,7 +221,7 @@ func convertColumns(columns []*parser.Column, primaryColumn string, strict bool)
 			}
 		}
 
-		dataType, err := converter.ConvertDataType(column.DataType.Type(), isDefaultNull, column.DataType.Unsigned(), strict)
+		dataType, thirdPkg, err := converter.ConvertDataType(column.DataType.Type(), isDefaultNull, column.DataType.Unsigned(), strict)
 		if err != nil {
 			return Primary{}, nil, err
 		}
@@ -237,6 +238,7 @@ func convertColumns(columns []*parser.Column, primaryColumn string, strict bool)
 
 		var field Field
 		field.Name = stringx.From(column.Name)
+		field.ThirdPkg = thirdPkg
 		field.DataType = dataType
 		field.Comment = util.TrimNewLine(comment)
 		field.ColumnDataType = column.DataType
@@ -268,7 +270,7 @@ func (t *Table) ContainsTime() bool {
 func ConvertDataType(table *model.Table, strict bool) (*Table, error) {
 	isPrimaryDefaultNull := table.PrimaryKey.ColumnDefault == nil && table.PrimaryKey.IsNullAble == "YES"
 	isPrimaryUnsigned := strings.Contains(table.PrimaryKey.DbColumn.ColumnType, "unsigned")
-	primaryDataType, containsPQ, err := converter.ConvertStringDataType(table.PrimaryKey.DataType, isPrimaryDefaultNull, isPrimaryUnsigned, strict)
+	primaryDataType, thirdPkg, containsPQ, err := converter.ConvertStringDataType(table.PrimaryKey.DataType, isPrimaryDefaultNull, isPrimaryUnsigned, strict)
 	if err != nil {
 		return nil, err
 	}
@@ -286,6 +288,7 @@ func ConvertDataType(table *model.Table, strict bool) (*Table, error) {
 	reply.PrimaryKey = Primary{
 		Field: Field{
 			Name:            stringx.From(table.PrimaryKey.Name),
+			ThirdPkg:        thirdPkg,
 			DataType:        primaryDataType,
 			Comment:         table.PrimaryKey.Comment,
 			SeqInIndex:      seqInIndex,
@@ -352,7 +355,7 @@ func getTableFields(table *model.Table, strict bool) (map[string]*Field, error) 
 	for _, each := range table.Columns {
 		isDefaultNull := each.ColumnDefault == nil && each.IsNullAble == "YES"
 		isPrimaryUnsigned := strings.Contains(each.ColumnType, "unsigned")
-		dt, containsPQ, err := converter.ConvertStringDataType(each.DataType, isDefaultNull, isPrimaryUnsigned, strict)
+		dt, thirdPkg, containsPQ, err := converter.ConvertStringDataType(each.DataType, isDefaultNull, isPrimaryUnsigned, strict)
 		if err != nil {
 			return nil, err
 		}
@@ -364,6 +367,7 @@ func getTableFields(table *model.Table, strict bool) (map[string]*Field, error) 
 		field := &Field{
 			NameOriginal:    each.Name,
 			Name:            stringx.From(each.Name),
+			ThirdPkg:        thirdPkg,
 			DataType:        dt,
 			Comment:         each.Comment,
 			SeqInIndex:      columnSeqInIndex,
