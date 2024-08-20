@@ -1202,7 +1202,7 @@ func (p *Parser) parseAtServerKVExpression() *ast.KVExpr {
 		return expr
 	} else if p.peekTokenIs(token.STRING) {
 		if expr.Key.Token.Text != summaryKeyExprText {
-			if p.notExpectPeekToken(token.QUO, token.DURATION, token.IDENT, token.INT) {
+			if p.notExpectPeekToken(token.QUO, token.DURATION, token.IDENT, token.INT, token.STRING) {
 				return nil
 			}
 		}
@@ -1232,7 +1232,7 @@ func (p *Parser) parseAtServerKVExpression() *ast.KVExpr {
 					}
 
 					slashTok := p.curTok
-					if !p.advanceIfPeekTokenIs(token.IDENT) {
+					if !p.advanceIfPeekTokenIs(token.IDENT, token.STRING) {
 						return nil
 					}
 
