@@ -37,7 +37,8 @@ func (g *Generator) GenMain(ctx DirContext, proto parser.Proto, cfg *conf.Config
 	pbImport := fmt.Sprintf(`"%v"`, ctx.GetPb().Package)
 	svcImport := fmt.Sprintf(`"%v"`, ctx.GetSvc().Package)
 	configImport := fmt.Sprintf(`"%v"`, ctx.GetConfig().Package)
-	imports = append(imports, configImport, pbImport, svcImport)
+	startupImport := fmt.Sprintf(`"%v"`, ctx.GetStartup().Package)
+	imports = append(imports, configImport, pbImport, svcImport, startupImport)
 
 	var serviceNames []MainServiceTemplateData
 	for _, e := range proto.Service {

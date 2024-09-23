@@ -20,6 +20,7 @@ const (
 	logic    = "logic"
 	server   = "server"
 	svc      = "svc"
+	startup  = "startup"
 	pb       = "pb"
 	protoGo  = "proto-go"
 	call     = "call"
@@ -37,8 +38,9 @@ type (
 		GetSvc() Dir
 		GetPb() Dir
 		GetProtoGo() Dir
-		GetMain() Dir
 		GetServiceName() stringx.String
+		GetMain() Dir
+		GetStartup() Dir
 		SetPbDir(pbDir, grpcDir string)
 	}
 
@@ -64,6 +66,7 @@ func mkdir(ctx *ctx.ProjectContext, proto parser.Proto, conf *conf.Config, c *ZR
 	clientDir := filepath.Join(ctx.WorkDir, "client")
 	internalDir := filepath.Join(ctx.WorkDir, "internal")
 	configDir := filepath.Join(internalDir, "config")
+	startupDir := filepath.Join(internalDir, "startup")
 	logicDir := filepath.Join(internalDir, "logic")
 	serverDir := filepath.Join(internalDir, "server")
 	svcDir := filepath.Join(internalDir, "svc")
@@ -174,6 +177,15 @@ func mkdir(ctx *ctx.ProjectContext, proto parser.Proto, conf *conf.Config, c *ZR
 		},
 	}
 
+	inner[startup] = Dir{
+		Filename: startupDir,
+		Package:  filepath.ToSlash(filepath.Join(ctx.Path, strings.TrimPrefix(startupDir, ctx.Dir))),
+		Base:     filepath.Base(startupDir),
+		GetChildPackage: func(childPath string) (string, error) {
+			return getChildPackage(svcDir, childPath)
+		},
+	}
+
 	inner[pb] = Dir{
 		Filename: pbDir,
 		Package:  filepath.ToSlash(filepath.Join(ctx.Path, strings.TrimPrefix(pbDir, ctx.Dir))),
@@ -260,6 +272,10 @@ func (d *defaultDirContext) GetProtoGo() Dir {
 
 func (d *defaultDirContext) GetMain() Dir {
 	return d.inner[wd]
+}
+
+func (d *defaultDirContext) GetStartup() Dir {
+	return d.inner[startup]
 }
 
 func (d *defaultDirContext) GetServiceName() stringx.String {

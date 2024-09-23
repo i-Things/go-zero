@@ -48,10 +48,14 @@ func CreateServiceCommand(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	err = pathx.MkdirIfNotExist(filepath.Join(abs, "http"))
+	if err != nil {
+		return err
+	}
 
 	dirName = filepath.Base(filepath.Clean(abs))
 	filename := dirName + ".api"
-	apiFilePath := filepath.Join(abs, filename)
+	apiFilePath := filepath.Join(abs, "http", filename)
 	fp, err := os.Create(apiFilePath)
 	if err != nil {
 		return err

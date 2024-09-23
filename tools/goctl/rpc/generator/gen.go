@@ -67,6 +67,10 @@ func (g *Generator) Generate(zctx *ZRpcContext) error {
 		return err
 	}
 
+	err = g.GenStartup(dirCtx, g.cfg)
+	if err != nil {
+		return err
+	}
 	err = g.GenEtc(dirCtx, proto, g.cfg)
 	if err != nil {
 		return err

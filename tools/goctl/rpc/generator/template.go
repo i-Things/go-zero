@@ -16,6 +16,7 @@ const (
 	logicTemplateFileFile             = "logic.tpl"
 	logicFuncTemplateFileFile         = "logic-func.tpl"
 	mainTemplateFile                  = "main.tpl"
+	startupTemplateFile               = "startup.tpl"
 	serverTemplateFile                = "server.tpl"
 	serverFuncTemplateFile            = "server-func.tpl"
 	svcTemplateFile                   = "svc.tpl"
@@ -28,6 +29,7 @@ var templates = map[string]string{
 	etcTemplateFileFile:       etcTemplate,
 	logicTemplateFileFile:     logicTemplate,
 	logicFuncTemplateFileFile: logicFunctionTemplate,
+	startupTemplateFile:       startupTemplate,
 	mainTemplateFile:          mainTemplate,
 	serverTemplateFile:        serverTemplate,
 	serverFuncTemplateFile:    functionTemplate,
