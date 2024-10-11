@@ -27,7 +27,7 @@ const (
 package handler
 
 import (
-	ws "gitee.com/i-Things/share/websocket"
+	ws "gitee.com/unitedrhino/share/websocket"
 	"net/http"{{if .hasTimeout}}
 	"time"{{end}}
 

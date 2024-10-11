@@ -2,7 +2,7 @@ package svc
 
 import (
 	{{.configImport}}
-	"gitee.com/i-Things/share/ctxs"
+	"gitee.com/unitedrhino/share/ctxs"
 	"github.com/zeromicro/go-zero/rest"
 )
 

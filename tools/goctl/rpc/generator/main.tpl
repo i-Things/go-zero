@@ -3,7 +3,7 @@ package main
 import (
     "context"
 	"fmt"
-	"gitee.com/i-Things/share/interceptors"
+	"gitee.com/unitedrhino/share/interceptors"
 
 	{{.imports}}
 
@@ -11,7 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"gitee.com/i-Things/share/utils"
+	"gitee.com/unitedrhino/share/utils"
 )
 
 

@@ -2,8 +2,8 @@ package {{.PkgName}}
 
 import (
 	"net/http"
-	{{if .HasRequest}}"gitee.com/i-Things/share/errors"{{end}}
-    "gitee.com/i-Things/share/result"
+	{{if .HasRequest}}"gitee.com/unitedrhino/share/errors"{{end}}
+    "gitee.com/unitedrhino/share/result"
 	{{if .HasRequest}}"github.com/zeromicro/go-zero/rest/httpx"{{end}}
 	{{.ImportPackages}}
 )
