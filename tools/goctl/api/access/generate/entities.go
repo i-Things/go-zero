@@ -7,7 +7,7 @@ type Access struct {
 type AccessInfo struct {
 	Name       string    `json:"name"`       // 请求名称
 	Code       string    `json:"code"`       // 请求名称
-	Group      string    `json:"group"`      // 接口组
+	Group      string    `json:"group"`      // 授权组
 	IsNeedAuth int64     `json:"isNeedAuth"` // 是否需要认证（1是 2否）
 	Desc       string    `json:"desc"`       // 备注
 	Apis       []ApiInfo `json:"apis"`       //授权组下的接口
